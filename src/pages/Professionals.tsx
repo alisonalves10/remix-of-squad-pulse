@@ -6,11 +6,14 @@ import { Badge } from "@/components/ui/badge";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { TrendChart } from "@/components/dashboard/TrendChart";
 import { VelocityChart } from "@/components/dashboard/VelocityChart";
+import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { TrendingUp, CheckCircle, Bug, FileText } from "lucide-react";
 import { useState } from "react";
 import { mockProfessionals, mockWorkItems, mockProfessionalTrend, mockSquads } from "@/lib/mock-data";
+import { useExport } from "@/hooks/useExport";
 
 const Professionals = () => {
+  const { exportToPDF, exportToExcel } = useExport();
   const [selectedProfessional, setSelectedProfessional] = useState(mockProfessionals[0].id);
   const [selectedSquadFilter, setSelectedSquadFilter] = useState("all");
 
@@ -50,10 +53,29 @@ const Professionals = () => {
     return <Badge className={styles[state] || styles["To Do"]}>{state}</Badge>;
   };
 
+  const exportConfig = {
+    title: `Relatório do Profissional - ${professional.name}`,
+    subtitle: `${professional.role} • ${professional.squad}`,
+    filename: `profissional-${professional.name.toLowerCase().replace(/\s+/g, "-")}-${new Date().toISOString().split("T")[0]}`,
+    columns: [
+      { header: "Sprint", key: "sprint" },
+      { header: "ID", key: "id" },
+      { header: "Título", key: "title" },
+      { header: "Tipo", key: "type" },
+      { header: "Story Points", key: "points" },
+      { header: "Estado", key: "state" },
+    ],
+    data: professionalItems.map(item => ({ ...item, sprint: "Sprint 26" })),
+  };
+
+  const handleExportPDF = () => exportToPDF(exportConfig);
+  const handleExportExcel = () => exportToExcel(exportConfig);
+
   return (
     <AppLayout 
       title="Visão por Profissional" 
       description="Análise de performance individual"
+      actions={<ExportButtons onExportPDF={handleExportPDF} onExportExcel={handleExportExcel} />}
     >
       <div className="space-y-6">
         {/* Filters */}

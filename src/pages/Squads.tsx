@@ -6,20 +6,43 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TrendChart } from "@/components/dashboard/TrendChart";
 import { KPICard } from "@/components/dashboard/KPICard";
+import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { Link } from "react-router-dom";
 import { ArrowRight, TrendingUp, Target, Calendar } from "lucide-react";
 import { useState } from "react";
 import { mockSquads, mockSprints, mockVelocityTrend } from "@/lib/mock-data";
+import { useExport } from "@/hooks/useExport";
 
 const Squads = () => {
+  const { exportToPDF, exportToExcel } = useExport();
   const [selectedSquad, setSelectedSquad] = useState(mockSquads[0].id);
   const squad = mockSquads.find(s => s.id === selectedSquad) || mockSquads[0];
   const squadSprints = mockSprints.filter(s => s.squadId === selectedSquad || selectedSquad === mockSquads[0].id);
+
+  const exportConfig = {
+    title: `Relatório da Squad - ${squad.name}`,
+    subtitle: "Histórico de sprints e métricas",
+    filename: `squad-${squad.name.toLowerCase().replace(/\s+/g, "-")}-${new Date().toISOString().split("T")[0]}`,
+    columns: [
+      { header: "Sprint", key: "name" },
+      { header: "Início", key: "startDate" },
+      { header: "Fim", key: "endDate" },
+      { header: "Planejado (pts)", key: "plannedPoints" },
+      { header: "Entregue (pts)", key: "completedPoints" },
+      { header: "Cumprimento (%)", key: "commitment" },
+      { header: "Spillover (%)", key: "spillover" },
+    ],
+    data: squadSprints,
+  };
+
+  const handleExportPDF = () => exportToPDF(exportConfig);
+  const handleExportExcel = () => exportToExcel(exportConfig);
 
   return (
     <AppLayout 
       title="Dashboard da Squad" 
       description="Análise detalhada de performance por equipe"
+      actions={<ExportButtons onExportPDF={handleExportPDF} onExportExcel={handleExportExcel} />}
     >
       <div className="space-y-6">
         {/* Squad Selector */}
