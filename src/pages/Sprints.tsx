@@ -9,12 +9,15 @@ import { Input } from "@/components/ui/input";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { BurndownChart } from "@/components/dashboard/BurndownChart";
 import { BurnupChart } from "@/components/dashboard/BurnupChart";
+import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { FileText, CheckCircle, AlertTriangle, RotateCcw, Target, Bug, Calendar, Search } from "lucide-react";
 import { useState } from "react";
 import { mockSprints, mockWorkItems, mockBurndownData, mockBurnupData } from "@/lib/mock-data";
+import { useExport } from "@/hooks/useExport";
 
 const SprintDetail = () => {
   const { id } = useParams();
+  const { exportToPDF, exportToExcel } = useExport();
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [stateFilter, setStateFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -57,10 +60,31 @@ const SprintDetail = () => {
   const bugsCreated = mockWorkItems.filter(i => i.type === "Bug").length;
   const bugsResolved = mockWorkItems.filter(i => i.type === "Bug" && i.state === "Done").length;
 
+  const exportConfig = {
+    title: `Relatório da Sprint - ${sprint.name}`,
+    subtitle: `${sprint.squadName} • ${sprint.startDate} - ${sprint.endDate}`,
+    filename: `sprint-${sprint.name.toLowerCase().replace(/\s+/g, "-")}-${new Date().toISOString().split("T")[0]}`,
+    columns: [
+      { header: "ID", key: "id" },
+      { header: "Tipo", key: "type" },
+      { header: "Título", key: "title" },
+      { header: "Responsável", key: "assignee" },
+      { header: "Estado", key: "state" },
+      { header: "Story Points", key: "points" },
+      { header: "Criado em", key: "createdAt" },
+      { header: "Concluído em", key: "completedAt" },
+    ],
+    data: filteredItems,
+  };
+
+  const handleExportPDF = () => exportToPDF(exportConfig);
+  const handleExportExcel = () => exportToExcel(exportConfig);
+
   return (
     <AppLayout 
       title={`${sprint.name}`} 
       description={`${sprint.squadName} • ${sprint.startDate} - ${sprint.endDate}`}
+      actions={<ExportButtons onExportPDF={handleExportPDF} onExportExcel={handleExportExcel} />}
     >
       <div className="space-y-6">
         {/* Sprint Header */}
