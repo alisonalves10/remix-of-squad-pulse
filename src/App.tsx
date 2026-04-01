@@ -3,11 +3,14 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Squads from "./pages/Squads";
 import SprintDetail from "./pages/Sprints";
 import Professionals from "./pages/Professionals";
 import Settings from "./pages/Settings";
+import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -18,17 +21,19 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/squads" element={<Squads />} />
-          <Route path="/squads/:id" element={<Squads />} />
-          <Route path="/sprints" element={<SprintDetail />} />
-          <Route path="/sprints/:id" element={<SprintDetail />} />
-          <Route path="/professionals" element={<Professionals />} />
-          <Route path="/settings" element={<Settings />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+            <Route path="/squads" element={<ProtectedRoute><Squads /></ProtectedRoute>} />
+            <Route path="/squads/:id" element={<ProtectedRoute><Squads /></ProtectedRoute>} />
+            <Route path="/sprints" element={<ProtectedRoute><SprintDetail /></ProtectedRoute>} />
+            <Route path="/sprints/:id" element={<ProtectedRoute><SprintDetail /></ProtectedRoute>} />
+            <Route path="/professionals" element={<ProtectedRoute><Professionals /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
