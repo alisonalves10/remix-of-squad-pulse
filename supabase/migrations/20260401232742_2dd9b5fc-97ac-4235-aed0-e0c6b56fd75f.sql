@@ -1,0 +1,1 @@
+ALTER TABLE public.squads ADD CONSTRAINT squads_name_unique UNIQUE (name);
