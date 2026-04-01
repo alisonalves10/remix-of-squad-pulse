@@ -5,9 +5,11 @@ import {
   User, 
   Settings, 
   Activity,
-  TrendingUp
+  TrendingUp,
+  LogOut
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Sidebar,
   SidebarContent,
@@ -20,6 +22,7 @@ import {
   SidebarMenuItem,
   SidebarFooter,
 } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
 
 const mainNavItems = [
   { title: "Dashboard Geral", url: "/", icon: LayoutDashboard },
@@ -33,6 +36,8 @@ const configNavItems = [
 ];
 
 export function AppSidebar() {
+  const { user, signOut } = useAuth();
+
   return (
     <Sidebar className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border px-6 py-5">
@@ -99,9 +104,17 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-4">
-        <div className="flex items-center gap-2 text-xs text-sidebar-foreground/50">
-          <TrendingUp className="h-3 w-3" />
-          <span>v1.0.0</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs text-sidebar-foreground/50">
+            <TrendingUp className="h-3 w-3" />
+            <span>v1.0.0</span>
+          </div>
+          {user && (
+            <Button variant="ghost" size="sm" onClick={signOut} className="h-7 gap-1 text-xs text-sidebar-foreground/50 hover:text-sidebar-foreground">
+              <LogOut className="h-3 w-3" />
+              Sair
+            </Button>
+          )}
         </div>
       </SidebarFooter>
     </Sidebar>
