@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
     };
 
     // Try WIQL with @CurrentIteration first, then fallback
-    const wiqlQuery = `SELECT [System.Id] FROM WorkItems WHERE [System.AreaPath] UNDER '${project}\\${areaPath}' AND [System.State] <> 'Removed' ORDER BY [System.ChangedDate] DESC`;
+    const wiqlQuery = `SELECT [System.Id] FROM WorkItems WHERE [System.AreaPath] UNDER '${project}\\\\${areaPath}' AND [System.IterationPath] = @CurrentIteration AND [System.State] <> 'Removed' ORDER BY [System.ChangedDate] DESC`;
 
     const wiqlRes = await fetch(`${azureBase}/_apis/wit/wiql?api-version=7.0`, {
       method: "POST",
