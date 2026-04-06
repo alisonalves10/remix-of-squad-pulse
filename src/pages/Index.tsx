@@ -34,7 +34,7 @@ const Index = () => {
     filename: `squads-performance-${new Date().toISOString().split("T")[0]}`,
     columns: [
       { header: "Squad", key: "name" },
-      { header: "Velocidade (pts)", key: "velocity" },
+      { header: "Velocidade (h)", key: "velocity" },
       { header: "Comprometimento (%)", key: "commitment" },
       { header: "Spillover (%)", key: "spillover" },
       { header: "Tendência", key: "trend" },
@@ -99,8 +99,8 @@ const Index = () => {
           />
           <KPICard
             title="Velocidade Média"
-            value={`${avgVelocity} pts`}
-            subtitle="Por sprint"
+            value={`${avgVelocity}h`}
+            subtitle="Horas por sprint"
             icon={TrendingUp}
             variant="success"
           />
@@ -131,12 +131,12 @@ const Index = () => {
           <VelocityChart 
             data={velocityBySquad} 
             title="Velocidade por Squad"
-            description="Story points concluídos na sprint mais recente"
+            description="Horas concluídas na sprint mais recente"
           />
           <TrendChart 
             data={velocityTrend} 
             title="Tendência de Velocidade"
-            description="Evolução da velocidade ao longo das sprints"
+            description="Evolução das horas ao longo das sprints"
           />
         </div>
 

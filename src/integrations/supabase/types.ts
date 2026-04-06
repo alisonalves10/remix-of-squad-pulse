@@ -49,10 +49,12 @@ export type Database = {
           bugs_created: number | null
           bugs_resolved: number | null
           calculated_at: string
+          completed_hours: number | null
           completed_points: number | null
           id: string
           items_completed: number | null
           items_planned: number | null
+          planned_hours: number | null
           planned_points: number | null
           sprint_id: string
           squad_id: string
@@ -61,10 +63,12 @@ export type Database = {
           bugs_created?: number | null
           bugs_resolved?: number | null
           calculated_at?: string
+          completed_hours?: number | null
           completed_points?: number | null
           id?: string
           items_completed?: number | null
           items_planned?: number | null
+          planned_hours?: number | null
           planned_points?: number | null
           sprint_id: string
           squad_id: string
@@ -73,10 +77,12 @@ export type Database = {
           bugs_created?: number | null
           bugs_resolved?: number | null
           calculated_at?: string
+          completed_hours?: number | null
           completed_points?: number | null
           id?: string
           items_completed?: number | null
           items_planned?: number | null
+          planned_hours?: number | null
           planned_points?: number | null
           sprint_id?: string
           squad_id?: string
@@ -261,9 +267,12 @@ export type Database = {
         Row: {
           assigned_to_user_id: string | null
           completed_at: string | null
+          completed_work: number | null
           created_at: string
           id: number
           is_spillover: boolean | null
+          original_estimate: number | null
+          remaining_work: number | null
           sprint_id: string
           squad_id: string
           state: string
@@ -274,9 +283,12 @@ export type Database = {
         Insert: {
           assigned_to_user_id?: string | null
           completed_at?: string | null
+          completed_work?: number | null
           created_at?: string
           id: number
           is_spillover?: boolean | null
+          original_estimate?: number | null
+          remaining_work?: number | null
           sprint_id: string
           squad_id: string
           state: string
@@ -287,9 +299,12 @@ export type Database = {
         Update: {
           assigned_to_user_id?: string | null
           completed_at?: string | null
+          completed_work?: number | null
           created_at?: string
           id?: number
           is_spillover?: boolean | null
+          original_estimate?: number | null
+          remaining_work?: number | null
           sprint_id?: string
           squad_id?: string
           state?: string

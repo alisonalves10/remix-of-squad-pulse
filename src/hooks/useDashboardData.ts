@@ -9,7 +9,7 @@ export function useDashboardData(selectedSquadId?: string | null) {
         supabase.from("squads").select("*").order("name"),
         supabase.from("sprints").select("*").order("start_date", { ascending: true }),
         supabase.from("metrics_snapshot").select("*"),
-        supabase.from("work_items").select("id, squad_id, sprint_id, is_spillover, story_points, state, type"),
+        supabase.from("work_items").select("id, squad_id, sprint_id, is_spillover, story_points, state, type, original_estimate, remaining_work, completed_work"),
       ]);
 
       if (squadsRes.error) throw squadsRes.error;
@@ -56,8 +56,8 @@ export function useDashboardData(selectedSquadId?: string | null) {
         const latestSprintId = latestSprintBySquad.get(squad.id);
         const m = latestSprintId ? metricsByKey.get(`${squad.id}_${latestSprintId}`) : undefined;
 
-        const completed = Number(m?.completed_points ?? 0);
-        const planned = Number(m?.planned_points ?? 0);
+        const completed = Number((m as any)?.completed_hours ?? 0);
+        const planned = Number((m as any)?.planned_hours ?? 0);
         const commitment = planned > 0 ? Math.round((completed / planned) * 100) : 0;
 
         const squadWorkItems = workItems.filter(
@@ -80,7 +80,7 @@ export function useDashboardData(selectedSquadId?: string | null) {
         if (squadSprints.length >= 2) {
           const prev = squadSprints[squadSprints.length - 2];
           const prevM = metricsByKey.get(`${squad.id}_${prev.id}`);
-          const prevCompleted = Number(prevM?.completed_points ?? 0);
+          const prevCompleted = Number((prevM as any)?.completed_hours ?? 0);
           if (completed > prevCompleted) trend = "up";
           else if (completed < prevCompleted) trend = "down";
         }
@@ -111,8 +111,8 @@ export function useDashboardData(selectedSquadId?: string | null) {
       const sprintOrder = [...new Map(sprints.map((s) => [s.name, s])).values()];
       const velocityTrend = sprintOrder.map((sprint) => {
         const sprintMetrics = metrics.filter((m) => m.sprint_id === sprint.id);
-        const vel = sprintMetrics.reduce((sum, m) => sum + Number(m.completed_points ?? 0), 0);
-        const comm = sprintMetrics.reduce((sum, m) => sum + Number(m.planned_points ?? 0), 0);
+        const vel = sprintMetrics.reduce((sum, m) => sum + Number((m as any).completed_hours ?? 0), 0);
+        const comm = sprintMetrics.reduce((sum, m) => sum + Number((m as any).planned_hours ?? 0), 0);
         return { name: sprint.name, velocity: vel, commitment: comm };
       });
 
