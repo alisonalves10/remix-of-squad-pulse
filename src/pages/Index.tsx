@@ -8,10 +8,13 @@ import { Users, TrendingUp, Target, AlertTriangle, Bug } from "lucide-react";
 import { useExport } from "@/hooks/useExport";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useState } from "react";
 
 const Index = () => {
   const { exportToPDF, exportToExcel } = useExport();
-  const { data, isLoading } = useDashboardData();
+  const [selectedSquadId, setSelectedSquadId] = useState<string | null>(null);
+  const { data, isLoading } = useDashboardData(selectedSquadId);
 
   const {
     totalSquads = 0,
@@ -22,6 +25,7 @@ const Index = () => {
     velocityBySquad = [],
     velocityTrend = [],
     squadTableData = [],
+    allSquads = [],
   } = data ?? {};
 
   const exportConfig = {
@@ -64,7 +68,25 @@ const Index = () => {
     <AppLayout 
       title="Dashboard Geral" 
       description="Visão consolidada de performance das squads"
-      actions={<ExportButtons onExportPDF={handleExportPDF} onExportExcel={handleExportExcel} />}
+      actions={
+        <div className="flex items-center gap-3">
+          <Select
+            value={selectedSquadId ?? "all"}
+            onValueChange={(val) => setSelectedSquadId(val === "all" ? null : val)}
+          >
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Filtrar por squad" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as Squads</SelectItem>
+              {allSquads.map((squad) => (
+                <SelectItem key={squad.id} value={squad.id}>{squad.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <ExportButtons onExportPDF={handleExportPDF} onExportExcel={handleExportExcel} />
+        </div>
+      }
     >
       <div className="space-y-6">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
