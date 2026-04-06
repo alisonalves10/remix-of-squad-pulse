@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,27 +10,72 @@ import { KPICard } from "@/components/dashboard/KPICard";
 import { BurndownChart } from "@/components/dashboard/BurndownChart";
 import { BurnupChart } from "@/components/dashboard/BurnupChart";
 import { ExportButtons } from "@/components/dashboard/ExportButtons";
-import { FileText, CheckCircle, AlertTriangle, RotateCcw, Target, Bug, Calendar, Search } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { FileText, CheckCircle, AlertTriangle, RotateCcw, Clock, Bug, Calendar, Search } from "lucide-react";
 import { useState } from "react";
-import { mockSprints, mockWorkItems, mockBurndownData, mockBurnupData } from "@/lib/mock-data";
+import { useSprintDetailData } from "@/hooks/useSprintDetailData";
 import { useExport } from "@/hooks/useExport";
 
 const SprintDetail = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { exportToPDF, exportToExcel } = useExport();
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [stateFilter, setStateFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Find sprint or use first one as default
-  const sprint = mockSprints.find(s => s.id === id) || mockSprints[0];
+  const { data, isLoading } = useSprintDetailData(id);
 
-  // Filter work items
-  const filteredItems = mockWorkItems.filter(item => {
+  if (isLoading) {
+    return (
+      <AppLayout title="Sprint" description="Carregando...">
+        <div className="space-y-6">
+          <Skeleton className="h-24 rounded-xl" />
+          <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-32 rounded-xl" />
+            ))}
+          </div>
+          <Skeleton className="h-96 rounded-xl" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!data) {
+    return (
+      <AppLayout title="Sprint" description="Nenhuma sprint encontrada">
+        <Card>
+          <CardContent className="p-12 text-center text-muted-foreground">
+            Nenhuma sprint disponível. Sincronize os dados do Azure DevOps primeiro.
+          </CardContent>
+        </Card>
+      </AppLayout>
+    );
+  }
+
+  const {
+    sprint,
+    allSprints,
+    workItems,
+    totalItems,
+    completedItems,
+    spilloverItems,
+    bugsCreated,
+    bugsResolved,
+    plannedHours,
+    completedHours,
+    commitment,
+    types,
+    states,
+  } = data;
+
+  const filteredItems = workItems.filter((item) => {
     const matchesType = typeFilter === "all" || item.type === typeFilter;
     const matchesState = stateFilter === "all" || item.state === stateFilter;
-    const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.id.toString().includes(searchTerm);
+    const matchesSearch =
+      item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.id.toString().includes(searchTerm);
     return matchesType && matchesState && matchesSearch;
   });
 
@@ -39,40 +84,47 @@ const SprintDetail = () => {
       "User Story": "bg-primary/10 text-primary border-primary/20",
       "Bug": "bg-destructive/10 text-destructive border-destructive/20",
       "Task": "bg-accent text-accent-foreground border-border",
+      "Feature": "bg-primary/10 text-primary border-primary/20",
+      "Issue": "bg-warning/10 text-warning border-warning/20",
+      "Epic": "bg-secondary text-secondary-foreground border-border",
     };
     return <Badge className={styles[type] || styles["Task"]}>{type}</Badge>;
   };
 
   const getStateBadge = (state: string) => {
-    const styles: Record<string, string> = {
-      "Done": "bg-success/10 text-success border-success/20",
-      "In Progress": "bg-warning/10 text-warning border-warning/20",
-      "To Do": "bg-muted text-muted-foreground border-border",
-    };
-    return <Badge className={styles[state] || styles["To Do"]}>{state}</Badge>;
+    const doneStates = ["Done", "Closed"];
+    const activeStates = ["Active", "In Progress", "Desenvolvimento", "Homologação", "Validação"];
+    const blockedStates = ["Bloqueado"];
+
+    if (doneStates.includes(state)) {
+      return <Badge className="bg-success/10 text-success border-success/20">{state}</Badge>;
+    }
+    if (activeStates.includes(state)) {
+      return <Badge className="bg-warning/10 text-warning border-warning/20">{state}</Badge>;
+    }
+    if (blockedStates.includes(state)) {
+      return <Badge className="bg-destructive/10 text-destructive border-destructive/20">{state}</Badge>;
+    }
+    return <Badge className="bg-muted text-muted-foreground border-border">{state}</Badge>;
   };
 
-  // Calculate sprint metrics
-  const totalItems = mockWorkItems.length;
-  const completedItems = mockWorkItems.filter(i => i.state === "Done").length;
-  const carryOver = 2; // Mock value
-  const spillover = totalItems - completedItems;
-  const bugsCreated = mockWorkItems.filter(i => i.type === "Bug").length;
-  const bugsResolved = mockWorkItems.filter(i => i.type === "Bug" && i.state === "Done").length;
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return "—";
+    return new Date(dateStr).toLocaleDateString("pt-BR");
+  };
 
   const exportConfig = {
     title: `Relatório da Sprint - ${sprint.name}`,
-    subtitle: `${sprint.squadName} • ${sprint.startDate} - ${sprint.endDate}`,
+    subtitle: `${sprint.squadName} • ${sprint.start_date} - ${sprint.end_date}`,
     filename: `sprint-${sprint.name.toLowerCase().replace(/\s+/g, "-")}-${new Date().toISOString().split("T")[0]}`,
     columns: [
       { header: "ID", key: "id" },
       { header: "Tipo", key: "type" },
       { header: "Título", key: "title" },
-      { header: "Responsável", key: "assignee" },
       { header: "Estado", key: "state" },
-      { header: "Story Points", key: "points" },
-      { header: "Criado em", key: "createdAt" },
-      { header: "Concluído em", key: "completedAt" },
+      { header: "Estimativa (h)", key: "original_estimate" },
+      { header: "Restante (h)", key: "remaining_work" },
+      { header: "Concluído (h)", key: "completed_work" },
     ],
     data: filteredItems,
   };
@@ -81,10 +133,29 @@ const SprintDetail = () => {
   const handleExportExcel = () => exportToExcel(exportConfig);
 
   return (
-    <AppLayout 
-      title={`${sprint.name}`} 
-      description={`${sprint.squadName} • ${sprint.startDate} - ${sprint.endDate}`}
-      actions={<ExportButtons onExportPDF={handleExportPDF} onExportExcel={handleExportExcel} />}
+    <AppLayout
+      title={sprint.name}
+      description={`${sprint.squadName} • ${sprint.start_date} → ${sprint.end_date}`}
+      actions={
+        <div className="flex items-center gap-3">
+          <Select
+            value={sprint.id}
+            onValueChange={(val) => navigate(`/sprints/${val}`)}
+          >
+            <SelectTrigger className="w-[260px]">
+              <SelectValue placeholder="Selecionar sprint" />
+            </SelectTrigger>
+            <SelectContent>
+              {allSprints.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.squadName} — {s.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <ExportButtons onExportPDF={handleExportPDF} onExportExcel={handleExportExcel} />
+        </div>
+      }
     >
       <div className="space-y-6">
         {/* Sprint Header */}
@@ -97,8 +168,8 @@ const SprintDetail = () => {
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Calendar className="h-4 w-4" />
-                <span>{sprint.startDate} → {sprint.endDate}</span>
-                {sprint.isClosed ? (
+                <span>{sprint.start_date} → {sprint.end_date}</span>
+                {sprint.is_closed ? (
                   <Badge variant="secondary" className="ml-2">Fechada</Badge>
                 ) : (
                   <Badge className="bg-primary/10 text-primary border-primary/20 ml-2">Em andamento</Badge>
@@ -123,25 +194,25 @@ const SprintDetail = () => {
             variant="success"
           />
           <KPICard
-            title="Carregados"
-            value={carryOver}
-            subtitle="Da sprint anterior"
-            icon={RotateCcw}
-            variant="warning"
-          />
-          <KPICard
             title="Spillover"
-            value={spillover}
-            subtitle="Não concluídos"
+            value={spilloverItems}
+            subtitle="Itens replanejados"
             icon={AlertTriangle}
-            variant={spillover <= 2 ? "default" : "danger"}
+            variant={spilloverItems <= 2 ? "default" : "danger"}
           />
           <KPICard
-            title="Story Points"
-            value={`${sprint.completedPoints}/${sprint.plannedPoints}`}
-            subtitle={`${sprint.commitment}% concluído`}
-            icon={Target}
-            variant={sprint.commitment >= 80 ? "success" : "warning"}
+            title="Horas Estimadas"
+            value={`${plannedHours}h`}
+            subtitle="Original Estimate"
+            icon={Clock}
+            variant="default"
+          />
+          <KPICard
+            title="Horas Concluídas"
+            value={`${completedHours}h`}
+            subtitle={`${commitment}% do planejado`}
+            icon={Clock}
+            variant={commitment >= 60 ? "success" : "warning"}
           />
           <KPICard
             title="Bugs"
@@ -152,122 +223,97 @@ const SprintDetail = () => {
           />
         </div>
 
-        {/* Tabs */}
-        <Tabs defaultValue="summary" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 lg:w-[500px]">
-            <TabsTrigger value="summary">Resumo</TabsTrigger>
-            <TabsTrigger value="burndown">Burndown</TabsTrigger>
-            <TabsTrigger value="burnup">Burnup</TabsTrigger>
-            <TabsTrigger value="items">Itens</TabsTrigger>
-          </TabsList>
+        {/* Work Items Table */}
+        <Card className="shadow-card">
+          <CardHeader>
+            <CardTitle className="text-lg">Work Items da Sprint</CardTitle>
+            <CardDescription>
+              {filteredItems.length} de {totalItems} itens
+            </CardDescription>
 
-          <TabsContent value="summary" className="space-y-6">
-            <div className="grid gap-6 lg:grid-cols-2">
-              <BurndownChart 
-                data={mockBurndownData} 
-                title="Burndown da Sprint"
-                description="Pontos restantes vs ideal"
-              />
-              <BurnupChart 
-                data={mockBurnupData} 
-                title="Burnup da Sprint"
-                description="Pontos concluídos vs escopo total"
-              />
+            {/* Filters */}
+            <div className="flex flex-col md:flex-row gap-4 pt-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por ID ou título..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-full md:w-[180px]">
+                  <SelectValue placeholder="Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os tipos</SelectItem>
+                  {types.map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={stateFilter} onValueChange={setStateFilter}>
+                <SelectTrigger className="w-full md:w-[180px]">
+                  <SelectValue placeholder="Estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os estados</SelectItem>
+                  {states.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </TabsContent>
-
-          <TabsContent value="burndown">
-            <BurndownChart 
-              data={mockBurndownData} 
-              title="Burndown Chart Detalhado"
-              description="Acompanhamento diário do progresso - pontos restantes vs linha ideal"
-            />
-          </TabsContent>
-
-          <TabsContent value="burnup">
-            <BurnupChart 
-              data={mockBurnupData} 
-              title="Burnup Chart Detalhado"
-              description="Pontos acumulados concluídos vs escopo total da sprint"
-            />
-          </TabsContent>
-
-          <TabsContent value="items">
-            <Card className="shadow-card">
-              <CardHeader>
-                <CardTitle className="text-lg">Work Items da Sprint</CardTitle>
-                <CardDescription>Itens de trabalho incluídos nesta sprint</CardDescription>
-                
-                {/* Filters */}
-                <div className="flex flex-col md:flex-row gap-4 pt-4">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input 
-                      placeholder="Buscar por ID ou título..." 
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                  <Select value={typeFilter} onValueChange={setTypeFilter}>
-                    <SelectTrigger className="w-full md:w-[180px]">
-                      <SelectValue placeholder="Tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos os tipos</SelectItem>
-                      <SelectItem value="User Story">User Story</SelectItem>
-                      <SelectItem value="Bug">Bug</SelectItem>
-                      <SelectItem value="Task">Task</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select value={stateFilter} onValueChange={setStateFilter}>
-                    <SelectTrigger className="w-full md:w-[180px]">
-                      <SelectValue placeholder="Estado" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos os estados</SelectItem>
-                      <SelectItem value="Done">Done</SelectItem>
-                      <SelectItem value="In Progress">In Progress</SelectItem>
-                      <SelectItem value="To Do">To Do</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Título</TableHead>
-                      <TableHead>Responsável</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead className="text-right">Points</TableHead>
-                      <TableHead>Criado em</TableHead>
-                      <TableHead>Concluído em</TableHead>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>ID</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Título</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead className="text-right">Estimativa (h)</TableHead>
+                    <TableHead className="text-right">Restante (h)</TableHead>
+                    <TableHead className="text-right">Concluído (h)</TableHead>
+                    <TableHead>Concluído em</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredItems.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-mono text-sm">{item.id}</TableCell>
+                      <TableCell>{getTypeBadge(item.type)}</TableCell>
+                      <TableCell className="max-w-[300px] truncate">{item.title}</TableCell>
+                      <TableCell>{getStateBadge(item.state)}</TableCell>
+                      <TableCell className="text-right font-mono">
+                        {Number(item.original_estimate) || "—"}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {Number(item.remaining_work) || "—"}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {Number(item.completed_work) || "—"}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {formatDate(item.completed_at)}
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredItems.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-mono text-sm">{item.id}</TableCell>
-                        <TableCell>{getTypeBadge(item.type)}</TableCell>
-                        <TableCell className="max-w-[300px] truncate">{item.title}</TableCell>
-                        <TableCell>{item.assignee}</TableCell>
-                        <TableCell>{getStateBadge(item.state)}</TableCell>
-                        <TableCell className="text-right font-mono">{item.points}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">{item.createdAt}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
-                          {item.completedAt || "—"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                  ))}
+                  {filteredItems.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                        Nenhum item encontrado com os filtros aplicados.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </AppLayout>
   );
