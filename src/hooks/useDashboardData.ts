@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-export function useDashboardData() {
+export function useDashboardData(selectedSquadId?: string | null) {
   return useQuery({
-    queryKey: ["dashboard-data"],
+    queryKey: ["dashboard-data", selectedSquadId ?? "all"],
     queryFn: async () => {
       const [squadsRes, sprintsRes, metricsRes, workItemsRes] = await Promise.all([
         supabase.from("squads").select("*").order("name"),
@@ -17,26 +17,24 @@ export function useDashboardData() {
       if (metricsRes.error) throw metricsRes.error;
       if (workItemsRes.error) throw workItemsRes.error;
 
-      const squads = squadsRes.data;
-      const sprints = sprintsRes.data;
-      const metrics = metricsRes.data;
-      const workItems = workItemsRes.data;
+      const allSquads = squadsRes.data;
+      const squads = selectedSquadId ? allSquads.filter(s => s.id === selectedSquadId) : allSquads;
+      const sprints = sprintsRes.data.filter(s => !selectedSquadId || s.squad_id === selectedSquadId);
+      const metrics = metricsRes.data.filter(m => !selectedSquadId || m.squad_id === selectedSquadId);
+      const workItems = workItemsRes.data.filter(wi => !selectedSquadId || wi.squad_id === selectedSquadId);
 
       const totalSquads = squads.length;
 
-      // Find latest sprint per squad
       const latestSprintBySquad = new Map<string, string>();
       for (const sprint of sprints) {
         latestSprintBySquad.set(sprint.squad_id, sprint.id);
       }
 
-      // Metrics indexed by squad+sprint
       const metricsByKey = new Map<string, typeof metrics[0]>();
       for (const m of metrics) {
         metricsByKey.set(`${m.squad_id}_${m.sprint_id}`, m);
       }
 
-      // Compute per-squad KPIs from latest sprint
       let totalVelocity = 0;
       let totalCommitment = 0;
       let commitmentCount = 0;
@@ -62,7 +60,6 @@ export function useDashboardData() {
         const planned = Number(m?.planned_points ?? 0);
         const commitment = planned > 0 ? Math.round((completed / planned) * 100) : 0;
 
-        // Spillover for this squad's latest sprint
         const squadWorkItems = workItems.filter(
           (wi) => wi.squad_id === squad.id && wi.sprint_id === latestSprintId
         );
@@ -78,7 +75,6 @@ export function useDashboardData() {
         totalBugsCreated += Number(m?.bugs_created ?? 0);
         totalBugsResolved += Number(m?.bugs_resolved ?? 0);
 
-        // Determine trend by comparing last 2 sprints
         const squadSprints = sprints.filter((s) => s.squad_id === squad.id);
         let trend: "up" | "down" | "stable" = "stable";
         if (squadSprints.length >= 2) {
@@ -104,17 +100,14 @@ export function useDashboardData() {
       const avgVelocity = totalSquads > 0 ? Math.round(totalVelocity / totalSquads) : 0;
       const avgCommitment = commitmentCount > 0 ? Math.round(totalCommitment / commitmentCount) : 0;
 
-      // Global spillover
       const allSpillover = workItems.filter((wi) => wi.is_spillover).length;
       const avgSpillover = workItems.length > 0 ? Math.round((allSpillover / workItems.length) * 100) : 0;
 
-      // Bug rate
       const bugRate =
         totalBugsCreated + totalBugsResolved > 0
           ? Math.round((totalBugsCreated / (totalBugsCreated + totalBugsResolved)) * 100)
           : 0;
 
-      // Velocity trend over sprints (aggregate all squads per sprint name)
       const sprintOrder = [...new Map(sprints.map((s) => [s.name, s])).values()];
       const velocityTrend = sprintOrder.map((sprint) => {
         const sprintMetrics = metrics.filter((m) => m.sprint_id === sprint.id);
@@ -132,6 +125,7 @@ export function useDashboardData() {
         velocityBySquad,
         velocityTrend,
         squadTableData,
+        allSquads,
       };
     },
   });
