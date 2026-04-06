@@ -1,30 +1,40 @@
 
 
-# Plan: Support multiple Area Paths (teams) sync
+# Plan: Switch metrics from Story Points to Time (hours)
 
-## What changes
+## Problem
+The dashboard currently uses `story_points` (from `Microsoft.VSTS.Scheduling.StoryPoints`) for velocity and metrics. The actual Azure DevOps data uses time-based fields: **Original Estimate**, **Remaining Work**, and **Completed Work** — all in hours.
 
-Allow the user to configure and sync multiple Area Paths (e.g., "Backoffice", "Payments", "Platform") in a single sync operation, creating one squad per area path.
+## Changes
 
-## Implementation
+### 1. Database migration — add time columns to `work_items`
+Add three new columns to `work_items`:
+- `original_estimate` (numeric, default 0) — planned hours
+- `remaining_work` (numeric, default 0) — hours left
+- `completed_work` (numeric, default 0) — hours done
 
-### 1. Update Settings UI (`src/pages/Settings.tsx`)
-- Replace the single `areaPath` text input with a multi-value input (comma-separated tags or a list with add/remove buttons)
-- Default value: `"Backoffice"` → display as a tag list
-- The sync button sends `{ areaPaths: ["Backoffice", "Payments", ...] }` instead of `{ areaPath: "Backoffice" }`
-- Show per-area-path sync progress/results in the toast
+### 2. Database migration — add time columns to `metrics_snapshot`
+Add two columns:
+- `planned_hours` (numeric, default 0) — sum of Original Estimate
+- `completed_hours` (numeric, default 0) — sum of Completed Work
 
-### 2. Update Edge Function (`supabase/functions/azure-sync/index.ts`)
-- Accept `areaPaths` (string array) in addition to the existing `areaPath` (string) for backward compatibility
-- Loop over each area path and run the existing sync logic (fetch current iteration, WIQL query, fetch work items, sync to database) per area path
-- Collect results per area path and return a summary: `{ results: [{ areaPath, synced, sprint, error? }, ...] }`
-- Each area path creates/updates its own squad, sprint, metrics, and work items independently
+### 3. Update Edge Function (`supabase/functions/azure-sync/index.ts`)
+- Extract Azure fields `Microsoft.VSTS.Scheduling.OriginalEstimate`, `Microsoft.VSTS.Scheduling.RemainingWork`, `Microsoft.VSTS.Scheduling.CompletedWork` when syncing work items
+- Store them in the new `work_items` columns
+- Calculate `planned_hours` (sum of Original Estimate) and `completed_hours` (sum of Completed Work) for `metrics_snapshot`
 
-### 3. UI for managing area paths
-- Simple tag-style input: text field + "Add" button, with removable badges showing each configured area path
-- Store the list in component state; send all on sync
+### 4. Update `src/hooks/useDashboardData.ts`
+- Fetch the new time columns from `work_items` (`original_estimate, remaining_work, completed_work`)
+- Replace all velocity/commitment calculations to use `planned_hours` and `completed_hours` from `metrics_snapshot` instead of `planned_points` / `completed_points`
+- Velocity = total completed hours; Commitment = completed_hours / planned_hours
+
+### 5. Update `src/pages/Index.tsx`
+- Change labels from "pts" to "h" (hours)
+- Update chart descriptions from "Story points" to "Horas"
 
 ## Files changed
-- `src/pages/Settings.tsx` — multi area path UI
-- `supabase/functions/azure-sync/index.ts` — loop over multiple area paths
+- `supabase/migrations/` — new migration for schema changes
+- `supabase/functions/azure-sync/index.ts` — extract time fields, compute hour-based metrics
+- `src/hooks/useDashboardData.ts` — use hours instead of points
+- `src/pages/Index.tsx` — update labels
 
