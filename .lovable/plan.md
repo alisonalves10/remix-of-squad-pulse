@@ -1,26 +1,39 @@
 
 
-# Plan: Fix RLS error on azure_config by assigning admin role
+# Plan: Replace mock data on Dashboard Geral with real database data
 
-## Problem
-The `azure_config` table requires the `admin` role for all operations (SELECT, INSERT, UPDATE, DELETE). Your user account was created but never received the admin role because the trigger to auto-assign it was never attached to any table.
+## What changes
 
-## Solution
+Replace all mock data imports in `src/pages/Index.tsx` with real data fetched from the database using the existing `useSquadsData.ts` hooks pattern.
 
-### Step 1: Insert admin role for current user
-Use the database insert tool to add the admin role for user `989db50e-65a1-4ff2-bbf9-17577d8aa622`.
+## Implementation
 
-```sql
-INSERT INTO public.user_roles (user_id, role) VALUES ('989db50e-65a1-4ff2-bbf9-17577d8aa622', 'admin');
-```
+### 1. Create `src/hooks/useDashboardData.ts`
+A new hook that fetches all data needed for the Dashboard Geral:
+- Fetch all squads from `squads` table
+- Fetch all sprints from `sprints` table
+- Fetch all metrics from `metrics_snapshot` table  
+- Fetch all work items from `work_items` table
+- Compute aggregate KPIs from real data:
+  - **Squads Monitoradas**: count of squads
+  - **Velocidade Média**: average `completed_points` across latest sprint per squad
+  - **Comprometimento**: average `(completed_points / planned_points) * 100`
+  - **Spillover**: percentage of work items with `is_spillover = true`
+  - **Taxa de Bugs**: `bugs_created / (bugs_created + bugs_resolved) * 100` from metrics
+- Build velocity-by-squad chart data: each squad's `completed_points` from current sprint
+- Build velocity trend chart data: `completed_points` and `planned_points` per sprint over time
 
-### Step 2: Create trigger for future users
-Create a migration to attach the existing `assign_admin_to_first_user` function as a trigger on the `auth.users` table — wait, we cannot attach triggers to `auth.users` (reserved schema). Instead, we'll create the trigger on `public.user_roles` or handle it differently.
+### 2. Update `src/pages/Index.tsx`
+- Remove all `mock-data` imports
+- Use the new `useDashboardData` hook
+- Add loading/empty states (skeleton or message when no data)
+- Feed real computed values into KPICards, VelocityChart, TrendChart, and SquadsTable
+- Adapt SquadsTable data to match its expected interface (id, name, velocity, commitment, spillover, trend)
 
-**Better approach**: Create a trigger on `auth.users` is not allowed. Instead, we'll add a database migration that creates a trigger on a profile-insert flow, OR simply ensure the first user gets admin via the insert above and leave manual admin assignment for future users.
-
-Since this is a dev/admin tool, the simplest fix is just the data insert (Step 1). No code changes needed — the Settings page will work immediately after.
+### 3. Update `src/components/dashboard/SquadsTable.tsx` (minor)
+- No structural changes needed — the Index page will transform DB data to match the existing `Squad` interface
 
 ## Files changed
-- None (data insert only)
+- `src/hooks/useDashboardData.ts` — new file
+- `src/pages/Index.tsx` — replace mock imports with real data hook
 
