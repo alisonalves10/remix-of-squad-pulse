@@ -4,7 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { RefreshCw, Save, Eye, EyeOff } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { RefreshCw, Save, Eye, EyeOff, Plus, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,7 +23,8 @@ const Settings = () => {
     pat: "",
   });
 
-  const [areaPath, setAreaPath] = useState("Backoffice");
+  const [areaPaths, setAreaPaths] = useState<string[]>(["Backoffice"]);
+  const [newAreaPath, setNewAreaPath] = useState("");
 
   useEffect(() => {
     loadConfig();
@@ -72,22 +74,61 @@ const Settings = () => {
     }
   };
 
+  const handleAddAreaPath = () => {
+    const trimmed = newAreaPath.trim();
+    if (!trimmed) return;
+    if (areaPaths.includes(trimmed)) {
+      toast({ title: "Duplicado", description: "Esse Area Path já foi adicionado.", variant: "destructive" });
+      return;
+    }
+    setAreaPaths([...areaPaths, trimmed]);
+    setNewAreaPath("");
+  };
+
+  const handleRemoveAreaPath = (path: string) => {
+    setAreaPaths(areaPaths.filter((p) => p !== path));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAddAreaPath();
+    }
+  };
+
   const handleSync = async () => {
+    if (areaPaths.length === 0) {
+      toast({ title: "Nenhum Area Path", description: "Adicione pelo menos um Area Path para sincronizar.", variant: "destructive" });
+      return;
+    }
+
     setIsSyncing(true);
     try {
       const { data, error } = await supabase.functions.invoke("azure-sync", {
-        body: { areaPath },
+        body: { areaPaths },
       });
 
       if (error) {
         toast({ title: "Erro na sincronização", description: error.message, variant: "destructive" });
       } else if (data?.error) {
         toast({ title: "Erro na sincronização", description: data.error, variant: "destructive" });
-      } else {
+      } else if (data?.results) {
+        const totalSynced = data.results.reduce((sum: number, r: any) => sum + (r.synced || 0), 0);
+        const errors = data.results.filter((r: any) => r.error);
+        const successful = data.results.filter((r: any) => !r.error);
+
+        let description = `${totalSynced} work items sincronizados em ${successful.length} time(s).`;
+        if (errors.length > 0) {
+          description += ` ${errors.length} erro(s): ${errors.map((e: any) => `${e.areaPath}: ${e.error}`).join("; ")}`;
+        }
+
         toast({
-          title: "Sincronização concluída!",
-          description: `${data.synced} work items sincronizados. Sprints: ${data.sprints?.join(", ") || "nenhum"}`,
+          title: errors.length > 0 ? "Sincronização parcial" : "Sincronização concluída!",
+          description,
+          variant: errors.length > 0 ? "destructive" : "default",
         });
+      } else {
+        toast({ title: "Sincronização concluída!", description: `${data?.synced || 0} work items sincronizados.` });
       }
     } catch (err: any) {
       toast({ title: "Erro", description: err.message, variant: "destructive" });
@@ -148,13 +189,38 @@ const Settings = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="areaPath">Area Path</Label>
-              <Input id="areaPath" placeholder="Backoffice" value={areaPath} onChange={(e) => setAreaPath(e.target.value)} />
-              <p className="text-xs text-muted-foreground">Area path para filtrar os work items (ex: Backoffice)</p>
+              <Label>Area Paths (Times)</Label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Nome do Area Path (ex: Backoffice)"
+                  value={newAreaPath}
+                  onChange={(e) => setNewAreaPath(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                />
+                <Button variant="outline" onClick={handleAddAreaPath}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Adicionar
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Adicione os Area Paths dos times que deseja sincronizar</p>
+
+              {areaPaths.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {areaPaths.map((path) => (
+                    <Badge key={path} variant="secondary" className="text-sm py-1 px-3 gap-1">
+                      {path}
+                      <button onClick={() => handleRemoveAreaPath(path)} className="ml-1 hover:text-destructive">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </div>
-            <Button variant="outline" onClick={handleSync} disabled={isSyncing}>
+
+            <Button variant="outline" onClick={handleSync} disabled={isSyncing || areaPaths.length === 0}>
               <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
-              {isSyncing ? "Sincronizando..." : "Sincronizar Agora"}
+              {isSyncing ? "Sincronizando..." : `Sincronizar ${areaPaths.length} Time(s)`}
             </Button>
           </CardContent>
         </Card>
@@ -169,7 +235,7 @@ const Settings = () => {
               <li>Vá em <strong>User Settings → Personal Access Tokens</strong></li>
               <li>Crie um novo token com escopo <code className="text-xs bg-muted px-1 py-0.5 rounded">Work Items (Read)</code> e <code className="text-xs bg-muted px-1 py-0.5 rounded">Project and Team (Read)</code></li>
               <li>Cole o token no campo PAT acima e salve</li>
-              <li>Defina o Area Path e clique em "Sincronizar Agora"</li>
+              <li>Adicione os Area Paths dos seus times e clique em "Sincronizar"</li>
             </ol>
           </CardContent>
         </Card>
