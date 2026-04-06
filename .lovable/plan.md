@@ -1,30 +1,26 @@
 
 
-# Plan: Fix `@CurrentIteration` to fetch only Sprint 7
+# Plan: Fix RLS error on azure_config by assigning admin role
 
 ## Problem
-The `@CurrentIteration` WIQL macro requires a **team context** to resolve correctly. Without it, Azure DevOps doesn't know which team's iteration schedule to use, so it returns work items from multiple iterations. That's why 8 different sprints were synced instead of just "2026 - Sprint 7".
+The `azure_config` table requires the `admin` role for all operations (SELECT, INSERT, UPDATE, DELETE). Your user account was created but never received the admin role because the trigger to auto-assign it was never attached to any table.
 
 ## Solution
-Two changes in `supabase/functions/azure-sync/index.ts`:
 
-### 1. Pass team context to the WIQL API call
-The Azure DevOps WIQL endpoint accepts a `team` parameter:
-```
-POST https://dev.azure.com/{org}/{project}/{team}/_apis/wit/wiql?api-version=7.0
-```
-We'll use the `areaPath` value (e.g. "Backoffice") as the team name in the URL. This tells Azure which team's iteration schedule to use when resolving `@CurrentIteration`.
+### Step 1: Insert admin role for current user
+Use the database insert tool to add the admin role for user `989db50e-65a1-4ff2-bbf9-17577d8aa622`.
 
-### 2. Fetch actual iteration dates from Azure API
-After the WIQL query, call the Azure Iterations API to get the real start/end dates for the current iteration:
+```sql
+INSERT INTO public.user_roles (user_id, role) VALUES ('989db50e-65a1-4ff2-bbf9-17577d8aa622', 'admin');
 ```
-GET https://dev.azure.com/{org}/{project}/{team}/_apis/work/teamsettings/iterations?$timeframe=current&api-version=7.0
-```
-Use these dates when upserting the sprint record instead of hardcoding `today + 14 days`.
 
-### 3. Clean up stale data
-Before syncing, delete work items and sprints that were incorrectly synced from non-current iterations (the 7 extra sprints). This will be done as a one-time cleanup in the edge function or via a migration.
+### Step 2: Create trigger for future users
+Create a migration to attach the existing `assign_admin_to_first_user` function as a trigger on the `auth.users` table — wait, we cannot attach triggers to `auth.users` (reserved schema). Instead, we'll create the trigger on `public.user_roles` or handle it differently.
+
+**Better approach**: Create a trigger on `auth.users` is not allowed. Instead, we'll add a database migration that creates a trigger on a profile-insert flow, OR simply ensure the first user gets admin via the insert above and leave manual admin assignment for future users.
+
+Since this is a dev/admin tool, the simplest fix is just the data insert (Step 1). No code changes needed — the Settings page will work immediately after.
 
 ## Files changed
-- `supabase/functions/azure-sync/index.ts` — add team to WIQL URL, fetch iteration dates, cleanup logic
+- None (data insert only)
 
