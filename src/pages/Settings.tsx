@@ -23,7 +23,7 @@ const Settings = () => {
     pat: "",
   });
 
-  const [areaPaths, setAreaPaths] = useState<string[]>(["Backoffice"]);
+  const [areaPaths, setAreaPaths] = useState<string[]>([]);
   const [newAreaPath, setNewAreaPath] = useState("");
 
   useEffect(() => {
@@ -41,6 +41,7 @@ const Settings = () => {
         project: c.project,
         pat: c.pat_encrypted || "",
       });
+      setAreaPaths((c as any).area_paths || ["Backoffice"]);
     }
     setIsLoading(false);
   };
@@ -55,6 +56,7 @@ const Settings = () => {
       organization: config.organization,
       project: config.project,
       pat_encrypted: config.pat,
+      area_paths: areaPaths.length > 0 ? areaPaths : ["Backoffice"],
       updated_at: new Date().toISOString(),
     };
 
