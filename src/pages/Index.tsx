@@ -5,18 +5,24 @@ import { TrendChart } from "@/components/dashboard/TrendChart";
 import { SquadsTable } from "@/components/dashboard/SquadsTable";
 import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { Users, TrendingUp, Target, AlertTriangle, Bug } from "lucide-react";
-import { mockSquads, mockVelocityBySquad, mockVelocityTrend } from "@/lib/mock-data";
 import { useExport } from "@/hooks/useExport";
+import { useDashboardData } from "@/hooks/useDashboardData";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const Index = () => {
   const { exportToPDF, exportToExcel } = useExport();
+  const { data, isLoading } = useDashboardData();
 
-  // Calculate aggregate KPIs
-  const totalSquads = mockSquads.length;
-  const avgVelocity = Math.round(mockSquads.reduce((sum, s) => sum + s.velocity, 0) / totalSquads);
-  const avgCommitment = Math.round(mockSquads.reduce((sum, s) => sum + s.commitment, 0) / totalSquads);
-  const avgSpillover = Math.round(mockSquads.reduce((sum, s) => sum + s.spillover, 0) / totalSquads);
-  const bugRate = 12; // Mock value
+  const {
+    totalSquads = 0,
+    avgVelocity = 0,
+    avgCommitment = 0,
+    avgSpillover = 0,
+    bugRate = 0,
+    velocityBySquad = [],
+    velocityTrend = [],
+    squadTableData = [],
+  } = data ?? {};
 
   const exportConfig = {
     title: "Relatório de Performance das Squads",
@@ -29,11 +35,30 @@ const Index = () => {
       { header: "Spillover (%)", key: "spillover" },
       { header: "Tendência", key: "trend" },
     ],
-    data: mockSquads,
+    data: squadTableData,
   };
 
   const handleExportPDF = () => exportToPDF(exportConfig);
   const handleExportExcel = () => exportToExcel(exportConfig);
+
+  if (isLoading) {
+    return (
+      <AppLayout title="Dashboard Geral" description="Visão consolidada de performance das squads">
+        <div className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-32 rounded-xl" />
+            ))}
+          </div>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Skeleton className="h-[380px] rounded-xl" />
+            <Skeleton className="h-[380px] rounded-xl" />
+          </div>
+          <Skeleton className="h-64 rounded-xl" />
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout 
@@ -42,7 +67,6 @@ const Index = () => {
       actions={<ExportButtons onExportPDF={handleExportPDF} onExportExcel={handleExportExcel} />}
     >
       <div className="space-y-6">
-        {/* KPI Cards */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
           <KPICard
             title="Squads Monitoradas"
@@ -56,7 +80,6 @@ const Index = () => {
             value={`${avgVelocity} pts`}
             subtitle="Por sprint"
             icon={TrendingUp}
-            trend={{ value: 8, isPositive: true }}
             variant="success"
           />
           <KPICard
@@ -82,23 +105,21 @@ const Index = () => {
           />
         </div>
 
-        {/* Charts Row */}
         <div className="grid gap-6 lg:grid-cols-2">
           <VelocityChart 
-            data={mockVelocityBySquad} 
+            data={velocityBySquad} 
             title="Velocidade por Squad"
-            description="Story points concluídos (média das últimas sprints)"
+            description="Story points concluídos na sprint mais recente"
           />
           <TrendChart 
-            data={mockVelocityTrend} 
+            data={velocityTrend} 
             title="Tendência de Velocidade"
             description="Evolução da velocidade ao longo das sprints"
           />
         </div>
 
-        {/* Squads Table */}
         <SquadsTable 
-          squads={mockSquads} 
+          squads={squadTableData} 
           title="Performance das Squads"
           description="Métricas consolidadas por equipe"
         />
