@@ -4,44 +4,126 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TrendChart } from "@/components/dashboard/TrendChart";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { Link } from "react-router-dom";
-import { ArrowRight, TrendingUp, Target, Calendar } from "lucide-react";
-import { useState } from "react";
-import { mockSquads, mockSprints, mockVelocityTrend } from "@/lib/mock-data";
+import { ArrowRight, TrendingUp, Target, Calendar, Package, Bug, CheckCircle, Loader2 } from "lucide-react";
+import { useState, useMemo } from "react";
+import { useSquads, useSprintsBySquad, useMetricsBySquad, useWorkItemsBySquad } from "@/hooks/useSquadsData";
 import { useExport } from "@/hooks/useExport";
+import { format } from "date-fns";
 
 const Squads = () => {
   const { exportToPDF, exportToExcel } = useExport();
-  const [selectedSquad, setSelectedSquad] = useState(mockSquads[0].id);
-  const squad = mockSquads.find(s => s.id === selectedSquad) || mockSquads[0];
-  const squadSprints = mockSprints.filter(s => s.squadId === selectedSquad || selectedSquad === mockSquads[0].id);
+  const { data: squads, isLoading: squadsLoading } = useSquads();
+  const [selectedSquadId, setSelectedSquadId] = useState<string>("");
+
+  const activeSquadId = selectedSquadId || squads?.[0]?.id || "";
+  const squad = squads?.find(s => s.id === activeSquadId);
+
+  const { data: sprints, isLoading: sprintsLoading } = useSprintsBySquad(activeSquadId);
+  const { data: metrics } = useMetricsBySquad(activeSquadId);
+  const { data: workItems } = useWorkItemsBySquad(activeSquadId);
+
+  // Compute KPIs from real data
+  const kpis = useMemo(() => {
+    if (!workItems || !metrics || !sprints) return null;
+
+    const currentSprint = sprints[0];
+    const currentMetrics = metrics.find(m => m.sprint_id === currentSprint?.id);
+
+    const totalItems = workItems.length;
+    const completedStates = ["Done", "Closed"];
+    const completedItems = workItems.filter(wi => completedStates.includes(wi.state)).length;
+    const totalPoints = workItems.reduce((sum, wi) => sum + (wi.story_points || 0), 0);
+    const completedPoints = workItems
+      .filter(wi => completedStates.includes(wi.state))
+      .reduce((sum, wi) => sum + (wi.story_points || 0), 0);
+    const bugs = workItems.filter(wi => wi.type === "Bug").length;
+    const bugsResolved = workItems.filter(wi => wi.type === "Bug" && completedStates.includes(wi.state)).length;
+
+    // Group by type
+    const byType: Record<string, number> = {};
+    workItems.forEach(wi => {
+      byType[wi.type] = (byType[wi.type] || 0) + 1;
+    });
+
+    // Group by state
+    const byState: Record<string, number> = {};
+    workItems.forEach(wi => {
+      byState[wi.state] = (byState[wi.state] || 0) + 1;
+    });
+
+    const commitment = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+
+    return {
+      totalItems,
+      completedItems,
+      totalPoints,
+      completedPoints,
+      bugs,
+      bugsResolved,
+      commitment,
+      byType,
+      byState,
+      currentMetrics,
+    };
+  }, [workItems, metrics, sprints]);
 
   const exportConfig = {
-    title: `Relatório da Squad - ${squad.name}`,
-    subtitle: "Histórico de sprints e métricas",
-    filename: `squad-${squad.name.toLowerCase().replace(/\s+/g, "-")}-${new Date().toISOString().split("T")[0]}`,
+    title: `Relatório da Squad - ${squad?.name || ""}`,
+    subtitle: "Dados sincronizados do Azure DevOps",
+    filename: `squad-${(squad?.name || "").toLowerCase().replace(/\s+/g, "-")}-${new Date().toISOString().split("T")[0]}`,
     columns: [
       { header: "Sprint", key: "name" },
-      { header: "Início", key: "startDate" },
-      { header: "Fim", key: "endDate" },
-      { header: "Planejado (pts)", key: "plannedPoints" },
-      { header: "Entregue (pts)", key: "completedPoints" },
-      { header: "Cumprimento (%)", key: "commitment" },
-      { header: "Spillover (%)", key: "spillover" },
+      { header: "Início", key: "start_date" },
+      { header: "Fim", key: "end_date" },
+      { header: "Itens Planejados", key: "items_planned" },
+      { header: "Itens Concluídos", key: "items_completed" },
+      { header: "Status", key: "status" },
     ],
-    data: squadSprints,
+    data: (sprints || []).map(sp => {
+      const m = metrics?.find(me => me.sprint_id === sp.id);
+      return {
+        name: sp.name,
+        start_date: sp.start_date,
+        end_date: sp.end_date,
+        items_planned: m?.items_planned ?? 0,
+        items_completed: m?.items_completed ?? 0,
+        status: sp.is_closed ? "Fechada" : "Em andamento",
+      };
+    }),
   };
 
   const handleExportPDF = () => exportToPDF(exportConfig);
   const handleExportExcel = () => exportToExcel(exportConfig);
 
+  if (squadsLoading) {
+    return (
+      <AppLayout title="Dashboard da Squad" description="Carregando...">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!squads || squads.length === 0) {
+    return (
+      <AppLayout title="Dashboard da Squad" description="Nenhuma squad encontrada">
+        <Card className="shadow-card">
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground">Nenhuma squad sincronizada. Vá em Configurações para sincronizar dados do Azure DevOps.</p>
+          </CardContent>
+        </Card>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout 
       title="Dashboard da Squad" 
-      description="Análise detalhada de performance por equipe"
+      description="Dados reais sincronizados do Azure DevOps"
       actions={<ExportButtons onExportPDF={handleExportPDF} onExportExcel={handleExportExcel} />}
     >
       <div className="space-y-6">
@@ -51,12 +133,12 @@ const Squads = () => {
             <CardTitle className="text-lg">Selecionar Squad</CardTitle>
           </CardHeader>
           <CardContent>
-            <Select value={selectedSquad} onValueChange={setSelectedSquad}>
+            <Select value={activeSquadId} onValueChange={setSelectedSquadId}>
               <SelectTrigger className="w-full md:w-[300px]">
                 <SelectValue placeholder="Selecione uma squad" />
               </SelectTrigger>
               <SelectContent>
-                {mockSquads.map((s) => (
+                {squads.map((s) => (
                   <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                 ))}
               </SelectContent>
@@ -67,114 +149,201 @@ const Squads = () => {
         {/* Squad Info */}
         <Card className="shadow-card">
           <CardHeader>
-            <CardTitle>{squad.name}</CardTitle>
-            <CardDescription>
-              Equipe de desenvolvimento focada em features de produto
-            </CardDescription>
+            <CardTitle>{squad?.name}</CardTitle>
+            <CardDescription>{squad?.description || "Equipe de desenvolvimento"}</CardDescription>
           </CardHeader>
         </Card>
 
-        {/* Squad KPIs */}
-        <div className="grid gap-4 md:grid-cols-3">
-          <KPICard
-            title="Velocidade Média"
-            value={`${squad.velocity} pts`}
-            subtitle="Últimas 6 sprints"
-            icon={TrendingUp}
-            variant="default"
-          />
-          <KPICard
-            title="Comprometimento"
-            value={`${squad.commitment}%`}
-            subtitle="Meta: acima de 80%"
-            icon={Target}
-            variant={squad.commitment >= 80 ? "success" : "warning"}
-          />
-          <KPICard
-            title="Sprints > 80%"
-            value="5 de 6"
-            subtitle="Últimas sprints com alta entrega"
-            icon={Calendar}
-            variant="success"
-          />
-        </div>
+        {/* KPIs */}
+        {kpis && (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <KPICard
+              title="Work Items"
+              value={`${kpis.completedItems}/${kpis.totalItems}`}
+              subtitle="Concluídos / Total"
+              icon={Package}
+              variant="default"
+            />
+            <KPICard
+              title="Cumprimento"
+              value={`${kpis.commitment}%`}
+              subtitle="Itens concluídos vs total"
+              icon={Target}
+              variant={kpis.commitment >= 50 ? "success" : "warning"}
+            />
+            <KPICard
+              title="Bugs"
+              value={`${kpis.bugsResolved}/${kpis.bugs}`}
+              subtitle="Resolvidos / Total"
+              icon={Bug}
+              variant={kpis.bugs === 0 ? "success" : kpis.bugsResolved >= kpis.bugs ? "success" : "warning"}
+            />
+            <KPICard
+              title="Story Points"
+              value={kpis.totalPoints > 0 ? `${kpis.completedPoints}/${kpis.totalPoints}` : "N/A"}
+              subtitle={kpis.totalPoints > 0 ? "Concluídos / Total" : "Sem pontos atribuídos"}
+              icon={TrendingUp}
+              variant="default"
+            />
+          </div>
+        )}
 
-        {/* Velocity Trend */}
-        <TrendChart 
-          data={mockVelocityTrend} 
-          title={`Evolução da Velocidade - ${squad.name}`}
-          description="Story points concluídos vs comprometidos por sprint"
-        />
+        {/* Work Items by Type & State */}
+        {kpis && (
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card className="shadow-card">
+              <CardHeader>
+                <CardTitle className="text-lg">Por Tipo</CardTitle>
+                <CardDescription>Distribuição de work items por tipo</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {Object.entries(kpis.byType).sort(([,a], [,b]) => b - a).map(([type, count]) => (
+                    <div key={type} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">{type}</Badge>
+                      </div>
+                      <span className="font-mono text-sm font-medium">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="shadow-card">
+              <CardHeader>
+                <CardTitle className="text-lg">Por Estado</CardTitle>
+                <CardDescription>Distribuição de work items por estado</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {Object.entries(kpis.byState).sort(([,a], [,b]) => b - a).map(([state, count]) => (
+                    <div key={state} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">{state}</Badge>
+                      </div>
+                      <span className="font-mono text-sm font-medium">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Sprints Table */}
         <Card className="shadow-card">
           <CardHeader>
-            <CardTitle className="text-lg">Histórico de Sprints</CardTitle>
-            <CardDescription>Sprints da equipe {squad.name}</CardDescription>
+            <CardTitle className="text-lg">Sprints</CardTitle>
+            <CardDescription>Sprints da equipe {squad?.name}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Sprint</TableHead>
-                  <TableHead>Período</TableHead>
-                  <TableHead className="text-right">Planejado</TableHead>
-                  <TableHead className="text-right">Entregue</TableHead>
-                  <TableHead className="text-right">Cumprimento</TableHead>
-                  <TableHead className="text-right">Spillover</TableHead>
-                  <TableHead className="text-center">Status</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {squadSprints.map((sprint) => (
-                  <TableRow key={sprint.id} className="group">
-                    <TableCell className="font-medium">{sprint.name}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {sprint.startDate} - {sprint.endDate}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">{sprint.plannedPoints} pts</TableCell>
-                    <TableCell className="text-right font-mono">{sprint.completedPoints} pts</TableCell>
-                    <TableCell className="text-right">
-                      <Badge 
-                        className={sprint.commitment >= 80 
-                          ? "bg-success/10 text-success border-success/20" 
-                          : "bg-warning/10 text-warning border-warning/20"
-                        }
-                      >
-                        {sprint.commitment}%
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Badge 
-                        className={sprint.spillover <= 15 
-                          ? "bg-success/10 text-success border-success/20" 
-                          : "bg-warning/10 text-warning border-warning/20"
-                        }
-                      >
-                        {sprint.spillover}%
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {sprint.isClosed ? (
-                        <Badge variant="secondary">Fechada</Badge>
-                      ) : (
-                        <Badge className="bg-primary/10 text-primary border-primary/20">Em andamento</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="sm" asChild className="opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Link to={`/sprints/${sprint.id}`}>
-                          Detalhes <ArrowRight className="ml-1 h-3 w-3" />
-                        </Link>
-                      </Button>
-                    </TableCell>
+            {sprintsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : !sprints || sprints.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">Nenhuma sprint encontrada.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Sprint</TableHead>
+                    <TableHead>Período</TableHead>
+                    <TableHead className="text-right">Itens Planejados</TableHead>
+                    <TableHead className="text-right">Itens Concluídos</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead></TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {sprints.map((sprint) => {
+                    const m = metrics?.find(me => me.sprint_id === sprint.id);
+                    return (
+                      <TableRow key={sprint.id} className="group">
+                        <TableCell className="font-medium">{sprint.name}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {format(new Date(sprint.start_date), "dd/MM/yyyy")} - {format(new Date(sprint.end_date), "dd/MM/yyyy")}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">{m?.items_planned ?? "-"}</TableCell>
+                        <TableCell className="text-right font-mono">{m?.items_completed ?? "-"}</TableCell>
+                        <TableCell className="text-center">
+                          {sprint.is_closed ? (
+                            <Badge variant="secondary">Fechada</Badge>
+                          ) : (
+                            <Badge className="bg-primary/10 text-primary border-primary/20">Em andamento</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="sm" asChild className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Link to={`/sprints/${sprint.id}`}>
+                              Detalhes <ArrowRight className="ml-1 h-3 w-3" />
+                            </Link>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
+
+        {/* Work Items Table */}
+        {workItems && workItems.length > 0 && (
+          <Card className="shadow-card">
+            <CardHeader>
+              <CardTitle className="text-lg">Work Items - Sprint Corrente</CardTitle>
+              <CardDescription>{workItems.length} itens sincronizados do Azure DevOps</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="max-h-[500px] overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Título</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead className="text-right">Pontos</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {workItems.map((wi) => (
+                      <TableRow key={wi.id}>
+                        <TableCell className="font-mono text-sm text-muted-foreground">{wi.id}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={
+                            wi.type === "Bug" ? "border-destructive/50 text-destructive" :
+                            wi.type === "User Story" ? "border-primary/50 text-primary" :
+                            wi.type === "Epic" ? "border-accent-foreground/50" :
+                            ""
+                          }>
+                            {wi.type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="max-w-[400px] truncate">{wi.title}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className={
+                            ["Done", "Closed"].includes(wi.state) ? "bg-success/10 text-success" :
+                            ["Active", "Desenvolvimento", "Execução"].includes(wi.state) ? "bg-primary/10 text-primary" :
+                            ["Bloqueado"].includes(wi.state) ? "bg-destructive/10 text-destructive" :
+                            ""
+                          }>
+                            {wi.state}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {wi.story_points || "-"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </AppLayout>
   );
