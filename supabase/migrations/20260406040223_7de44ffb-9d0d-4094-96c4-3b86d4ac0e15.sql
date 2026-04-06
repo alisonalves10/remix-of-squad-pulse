@@ -1,0 +1,1 @@
+ALTER TABLE public.azure_config ADD COLUMN area_paths text[] NOT NULL DEFAULT ARRAY['Backoffice']::text[];

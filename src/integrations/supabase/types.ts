@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       azure_config: {
         Row: {
+          area_paths: string[]
           created_at: string
           id: string
           organization: string
@@ -24,6 +25,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          area_paths?: string[]
           created_at?: string
           id?: string
           organization: string
@@ -32,6 +34,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          area_paths?: string[]
           created_at?: string
           id?: string
           organization?: string
