@@ -18,6 +18,14 @@ interface IterationInfo {
   endDate: string | null;
 }
 
+interface SyncResult {
+  areaPath: string;
+  synced: number;
+  sprint?: string;
+  squad?: string;
+  error?: string;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -63,10 +71,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    let areaPath = "Backoffice";
+    // Parse area paths from request body
+    let areaPaths: string[] = ["Backoffice"];
     try {
       const body = await req.json();
-      if (body.areaPath) areaPath = body.areaPath;
+      if (body.areaPaths && Array.isArray(body.areaPaths)) {
+        areaPaths = body.areaPaths;
+      } else if (body.areaPath) {
+        areaPaths = [body.areaPath];
+      }
     } catch { /* default */ }
 
     const azureHeaders = {
@@ -74,43 +87,19 @@ Deno.serve(async (req) => {
       Authorization: `Basic ${btoa(`:${pat}`)}`,
     };
 
-    // Use team context in the URL so @CurrentIteration resolves correctly
-    const teamAzureBase = `https://dev.azure.com/${organization}/${project}/${encodeURIComponent(areaPath)}`;
-    const azureBase = `https://dev.azure.com/${organization}/${project}`;
+    const results: SyncResult[] = [];
 
-    // 1. Fetch current iteration info (dates) from Azure
-    const currentIteration = await fetchCurrentIteration(teamAzureBase, azureHeaders);
-    console.log("Current iteration from Azure:", JSON.stringify(currentIteration));
-
-    // 2. WIQL with team context so @CurrentIteration resolves properly
-    const wiqlQuery = `SELECT [System.Id] FROM WorkItems WHERE [System.AreaPath] UNDER '${project}\\\\${areaPath}' AND [System.IterationPath] = @CurrentIteration AND [System.State] <> 'Removed' ORDER BY [System.ChangedDate] DESC`;
-
-    const wiqlRes = await fetch(`${teamAzureBase}/_apis/wit/wiql?api-version=7.0`, {
-      method: "POST",
-      headers: azureHeaders,
-      body: JSON.stringify({ query: wiqlQuery }),
-    });
-
-    if (!wiqlRes.ok) {
-      const errText = await wiqlRes.text();
-      return new Response(JSON.stringify({ error: `Erro WIQL: ${wiqlRes.status} - ${errText}` }), {
-        status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    for (const areaPath of areaPaths) {
+      try {
+        const result = await syncAreaPath(supabase, organization, project, areaPath, azureHeaders);
+        results.push(result);
+      } catch (err) {
+        console.error(`Error syncing area path ${areaPath}:`, err);
+        results.push({ areaPath, synced: 0, error: String(err) });
+      }
     }
 
-    const wiqlData = await wiqlRes.json();
-    const workItemIds = (wiqlData.workItems || []).map((wi: any) => wi.id).slice(0, 200);
-
-    if (workItemIds.length === 0) {
-      return new Response(JSON.stringify({ message: "Nenhum work item encontrado na sprint corrente.", synced: 0 }), {
-        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const workItems = await fetchWorkItemDetails(azureBase, azureHeaders, workItemIds);
-    const result = await syncToDatabase(supabase, workItems, organization, project, areaPath, currentIteration);
-
-    return new Response(JSON.stringify(result), {
+    return new Response(JSON.stringify({ results }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
@@ -120,6 +109,45 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+async function syncAreaPath(
+  supabase: any,
+  organization: string,
+  project: string,
+  areaPath: string,
+  azureHeaders: Record<string, string>
+): Promise<SyncResult> {
+  const teamAzureBase = `https://dev.azure.com/${organization}/${project}/${encodeURIComponent(areaPath)}`;
+  const azureBase = `https://dev.azure.com/${organization}/${project}`;
+
+  // 1. Fetch current iteration
+  const currentIteration = await fetchCurrentIteration(teamAzureBase, azureHeaders);
+  console.log(`[${areaPath}] Current iteration:`, JSON.stringify(currentIteration));
+
+  // 2. WIQL query
+  const wiqlQuery = `SELECT [System.Id] FROM WorkItems WHERE [System.AreaPath] UNDER '${project}\\\\${areaPath}' AND [System.IterationPath] = @CurrentIteration AND [System.State] <> 'Removed' ORDER BY [System.ChangedDate] DESC`;
+
+  const wiqlRes = await fetch(`${teamAzureBase}/_apis/wit/wiql?api-version=7.0`, {
+    method: "POST",
+    headers: azureHeaders,
+    body: JSON.stringify({ query: wiqlQuery }),
+  });
+
+  if (!wiqlRes.ok) {
+    const errText = await wiqlRes.text();
+    return { areaPath, synced: 0, error: `WIQL ${wiqlRes.status}: ${errText}` };
+  }
+
+  const wiqlData = await wiqlRes.json();
+  const workItemIds = (wiqlData.workItems || []).map((wi: any) => wi.id).slice(0, 200);
+
+  if (workItemIds.length === 0) {
+    return { areaPath, synced: 0, sprint: currentIteration?.name || "unknown" };
+  }
+
+  const workItems = await fetchWorkItemDetails(azureBase, azureHeaders, workItemIds);
+  return await syncToDatabase(supabase, workItems, organization, project, areaPath, currentIteration);
+}
 
 async function fetchCurrentIteration(teamAzureBase: string, headers: Record<string, string>): Promise<IterationInfo | null> {
   try {
@@ -160,7 +188,7 @@ async function fetchWorkItemDetails(azureBase: string, headers: Record<string, s
   return allItems;
 }
 
-async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: string, project: string, areaPath: string, currentIteration: IterationInfo | null) {
+async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: string, project: string, areaPath: string, currentIteration: IterationInfo | null): Promise<SyncResult> {
   const squadName = areaPath;
   const { data: squadData } = await supabase
     .from("squads")
@@ -181,10 +209,8 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
     }
   }
 
-  // Clean up: delete all old work_items and sprints for this squad that are NOT the current iteration
   const currentIterPath = workItems.length > 0 ? workItems[0].fields["System.IterationPath"] : null;
   if (currentIterPath) {
-    // Get sprints that don't match current iteration
     const { data: staleSprints } = await supabase
       .from("sprints")
       .select("id")
@@ -193,21 +219,18 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
 
     if (staleSprints && staleSprints.length > 0) {
       const staleIds = staleSprints.map((s: any) => s.id);
-      // Delete work items for stale sprints
       for (const sid of staleIds) {
         await supabase.from("work_items").delete().eq("sprint_id", sid);
         await supabase.from("metrics_snapshot").delete().eq("sprint_id", sid);
         await supabase.from("sprint_progress_daily").delete().eq("sprint_id", sid);
       }
-      // Delete stale sprints
       for (const sid of staleIds) {
         await supabase.from("sprints").delete().eq("id", sid);
       }
-      console.log(`Cleaned up ${staleIds.length} stale sprints for squad ${squadName}`);
+      console.log(`[${areaPath}] Cleaned up ${staleIds.length} stale sprints`);
     }
   }
 
-  // Determine sprint dates
   let startDate: string;
   let endDate: string;
   if (currentIteration?.startDate) {
@@ -235,17 +258,15 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
     }).select().single();
     sprint = newSprint;
   } else {
-    // Update dates if we have real ones from Azure
     if (currentIteration?.startDate) {
       await supabase.from("sprints").update({ start_date: startDate, end_date: endDate, name: sprintName }).eq("id", sprint.id);
     }
   }
 
   if (!sprint) {
-    return { error: "Falha ao criar sprint", synced: 0 };
+    return { areaPath, synced: 0, error: "Falha ao criar sprint" };
   }
 
-  // Delete existing work items for this sprint and re-insert
   await supabase.from("work_items").delete().eq("sprint_id", sprint.id);
 
   let totalSynced = 0;
@@ -268,7 +289,6 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
     totalSynced++;
   }
 
-  // Update metrics
   const planned = workItems.reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.StoryPoints"] || 0), 0);
   const completed = workItems.filter(wi => ["Done", "Closed"].includes(wi.fields["System.State"])).reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.StoryPoints"] || 0), 0);
   const bugsCreated = workItems.filter(wi => wi.fields["System.WorkItemType"] === "Bug").length;
@@ -291,5 +311,5 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
     await supabase.from("metrics_snapshot").insert({ sprint_id: sprint.id, squad_id: squadId, ...metricsPayload });
   }
 
-  return { message: "Sincronização concluída!", synced: totalSynced, sprint: sprintName, squad: squadName, iteration: iterPath };
+  return { areaPath, synced: totalSynced, sprint: sprintName, squad: squadName };
 }
