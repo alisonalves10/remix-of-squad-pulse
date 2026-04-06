@@ -99,8 +99,8 @@ const Index = () => {
           />
           <KPICard
             title="Velocidade Média"
-            value={`${avgVelocity} pts`}
-            subtitle="Por sprint"
+            value={`${avgVelocity}h`}
+            subtitle="Horas por sprint"
             icon={TrendingUp}
             variant="success"
           />
@@ -131,12 +131,12 @@ const Index = () => {
           <VelocityChart 
             data={velocityBySquad} 
             title="Velocidade por Squad"
-            description="Story points concluídos na sprint mais recente"
+            description="Horas concluídas na sprint mais recente"
           />
           <TrendChart 
             data={velocityTrend} 
             title="Tendência de Velocidade"
-            description="Evolução da velocidade ao longo das sprints"
+            description="Evolução das horas ao longo das sprints"
           />
         </div>
 

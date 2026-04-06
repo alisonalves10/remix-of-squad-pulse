@@ -275,6 +275,9 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
     const state = wi.fields["System.State"] || "New";
     const title = wi.fields["System.Title"] || `Work Item ${wi.id}`;
     const points = wi.fields["Microsoft.VSTS.Scheduling.StoryPoints"] || wi.fields["Microsoft.VSTS.Scheduling.Effort"] || 0;
+    const originalEstimate = wi.fields["Microsoft.VSTS.Scheduling.OriginalEstimate"] || 0;
+    const remainingWork = wi.fields["Microsoft.VSTS.Scheduling.RemainingWork"] || 0;
+    const completedWork = wi.fields["Microsoft.VSTS.Scheduling.CompletedWork"] || 0;
     const completedAt = state === "Done" || state === "Closed" ? (wi.fields["Microsoft.VSTS.Common.ClosedDate"] || null) : null;
 
     await supabase.from("work_items").insert({
@@ -283,6 +286,9 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
       squad_id: squadId,
       type, title, state,
       story_points: points,
+      original_estimate: originalEstimate,
+      remaining_work: remainingWork,
+      completed_work: completedWork,
       completed_at: completedAt,
       is_spillover: false,
     });
@@ -291,6 +297,8 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
 
   const planned = workItems.reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.StoryPoints"] || 0), 0);
   const completed = workItems.filter(wi => ["Done", "Closed"].includes(wi.fields["System.State"])).reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.StoryPoints"] || 0), 0);
+  const plannedHours = workItems.reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.OriginalEstimate"] || 0), 0);
+  const completedHours = workItems.reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.CompletedWork"] || 0), 0);
   const bugsCreated = workItems.filter(wi => wi.fields["System.WorkItemType"] === "Bug").length;
   const bugsResolved = workItems.filter(wi => wi.fields["System.WorkItemType"] === "Bug" && ["Done", "Closed"].includes(wi.fields["System.State"])).length;
 
@@ -298,6 +306,8 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
   const metricsPayload = {
     planned_points: planned,
     completed_points: completed,
+    planned_hours: plannedHours,
+    completed_hours: completedHours,
     bugs_created: bugsCreated,
     bugs_resolved: bugsResolved,
     items_planned: workItems.length,
