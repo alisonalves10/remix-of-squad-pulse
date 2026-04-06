@@ -34,7 +34,7 @@ const Index = () => {
     filename: `squads-performance-${new Date().toISOString().split("T")[0]}`,
     columns: [
       { header: "Squad", key: "name" },
-      { header: "Velocidade (pts)", key: "velocity" },
+      { header: "Velocidade (h)", key: "velocity" },
       { header: "Comprometimento (%)", key: "commitment" },
       { header: "Spillover (%)", key: "spillover" },
       { header: "Tendência", key: "trend" },
