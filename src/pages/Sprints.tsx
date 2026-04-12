@@ -307,7 +307,7 @@ const SprintDetail = () => {
                       <TableCell>{getTypeBadge(item.type)}</TableCell>
                        <TableCell className="max-w-[300px] truncate">{item.title}</TableCell>
                        <TableCell className="text-sm">{(item as any).assigned_to_name || "—"}</TableCell>
-                      <TableCell className="text-right font-mono">
+                       <TableCell>{getStateBadge(item.state)}</TableCell>
                         {Number(item.original_estimate) || "—"}
                       </TableCell>
                       <TableCell className="text-right font-mono">
