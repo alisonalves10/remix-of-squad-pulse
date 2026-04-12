@@ -37,7 +37,7 @@ export function BurnupChart({ data, title = "Burnup Chart", description }: Burnu
               <YAxis 
                 tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
                 axisLine={{ stroke: 'hsl(var(--border))' }}
-                label={{ value: 'Story Points', angle: -90, position: 'insideLeft', fill: 'hsl(var(--muted-foreground))' }}
+                label={{ value: 'Horas', angle: -90, position: 'insideLeft', fill: 'hsl(var(--muted-foreground))' }}
               />
               <Tooltip 
                 contentStyle={{
