@@ -41,12 +41,18 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: userData, error: userError } = await userClient.auth.getUser();
-    if (userError || !userData?.user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const token = authHeader.replace("Bearer ", "");
+    const isCronCall = token === anonKey;
+
+    if (!isCronCall) {
+      // Validate user auth for manual calls
+      const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: userData, error: userError } = await userClient.auth.getUser();
+      if (userError || !userData?.user) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
@@ -71,8 +77,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Parse area paths from request body
-    let areaPaths: string[] = ["Backoffice"];
+    // Parse area paths from request body or fall back to azure_config
+    let areaPaths: string[] = config.area_paths || ["Backoffice"];
     try {
       const body = await req.json();
       if (body.areaPaths && Array.isArray(body.areaPaths)) {
@@ -80,7 +86,7 @@ Deno.serve(async (req) => {
       } else if (body.areaPath) {
         areaPaths = [body.areaPath];
       }
-    } catch { /* default */ }
+    } catch { /* use config defaults for cron calls */ }
 
     const azureHeaders = {
       "Content-Type": "application/json",
