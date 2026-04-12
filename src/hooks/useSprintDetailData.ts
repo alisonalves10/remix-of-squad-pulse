@@ -99,6 +99,8 @@ export function useSprintDetailData(sprintId?: string) {
         commitment,
         types,
         states,
+        burndownData,
+        burnupData,
       };
     },
   });
