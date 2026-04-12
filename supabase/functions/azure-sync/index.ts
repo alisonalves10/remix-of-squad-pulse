@@ -77,8 +77,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Parse area paths from request body
-    let areaPaths: string[] = ["Backoffice"];
+    // Parse area paths from request body or fall back to azure_config
+    let areaPaths: string[] = config.area_paths || ["Backoffice"];
     try {
       const body = await req.json();
       if (body.areaPaths && Array.isArray(body.areaPaths)) {
@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
       } else if (body.areaPath) {
         areaPaths = [body.areaPath];
       }
-    } catch { /* default */ }
+    } catch { /* use config defaults for cron calls */ }
 
     const azureHeaders = {
       "Content-Type": "application/json",
