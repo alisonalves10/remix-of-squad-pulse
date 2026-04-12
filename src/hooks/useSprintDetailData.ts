@@ -42,6 +42,23 @@ export function useSprintDetailData(sprintId?: string) {
 
       const workItems = workItemsRes.data || [];
       const metrics = metricsRes.data;
+      const progressDaily = progressRes.data || [];
+
+      // Build burndown data
+      const totalEstimate = Number(metrics?.planned_hours ?? 0);
+      const sprintDays = progressDaily.length || 1;
+      const burndownData = progressDaily.map((d, i) => ({
+        date: new Date(d.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+        remaining: Number(d.remaining_points ?? 0),
+        ideal: Math.max(0, totalEstimate - (totalEstimate / (sprintDays - 1)) * i),
+      }));
+
+      // Build burnup data
+      const burnupData = progressDaily.map((d) => ({
+        date: new Date(d.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+        completed: Number(d.completed_points ?? 0),
+        scope: Number(d.total_scope_points ?? 0),
+      }));
 
       const totalItems = workItems.length;
       const completedItems = workItems.filter((wi) =>
