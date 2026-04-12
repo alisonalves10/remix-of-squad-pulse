@@ -57,7 +57,11 @@ export function useSprintDetailData(sprintId?: string) {
       const chartTypes = ["Task", "Issue", "Bug", "Speed"];
       const chartItems = workItems.filter((wi) => chartTypes.includes(wi.type));
 
-      const totalEstimate = chartItems.reduce((sum, wi) => sum + Number(wi.original_estimate ?? 0), 0);
+      // Use the first day's scope from sprint_progress_daily if available, otherwise fall back to work items
+      const firstDayScope = progressDaily.length > 0 ? Number(progressDaily[0].total_scope_points ?? 0) : 0;
+      const totalEstimate = firstDayScope > 0
+        ? firstDayScope
+        : chartItems.reduce((sum, wi) => sum + Number(wi.original_estimate ?? 0), 0);
       const totalCompleted = chartItems.reduce((sum, wi) => sum + Number(wi.completed_work ?? 0), 0);
       const totalRemaining = chartItems.reduce((sum, wi) => sum + Number(wi.remaining_work ?? 0), 0);
 
