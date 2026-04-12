@@ -371,6 +371,7 @@ async function backfillDailyProgress(
   supabase: any,
   organization: string,
   project: string,
+  areaPath: string,
   iterationPath: string,
   sprintId: string,
   startDate: string,
@@ -382,8 +383,10 @@ async function backfillDailyProgress(
     const today = new Date().toISOString().split("T")[0];
     const upperDate = today < endDate ? today : endDate;
 
+    const fullAreaPath = `${project}\\\\${areaPath}`;
     const filterClause = [
       `Iteration/IterationPath eq '${iterationPath}'`,
+      `Area/AreaPath eq '${fullAreaPath}'`,
       `DateValue ge ${startDate}Z`,
       `DateValue le ${upperDate}Z`,
       `(WorkItemType eq 'Task' or WorkItemType eq 'Bug' or WorkItemType eq 'Issue' or WorkItemType eq 'Speed')`,
