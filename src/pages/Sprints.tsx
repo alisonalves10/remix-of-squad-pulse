@@ -68,6 +68,8 @@ const SprintDetail = () => {
     commitment,
     types,
     states,
+    burndownData,
+    burnupData,
   } = data;
 
   const filteredItems = workItems.filter((item) => {
