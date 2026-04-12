@@ -64,43 +64,48 @@ export function useSprintDetailData(sprintId?: string) {
       let burndownData: Array<{ date: string; remaining: number; ideal: number }> = [];
       let burnupData: Array<{ date: string; completed: number; scope: number }> = [];
 
-      if (progressDaily.length > 0) {
-        const sprintDays = progressDaily.length;
-        burndownData = progressDaily.map((d, i) => ({
-          date: new Date(d.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+      // Always generate full sprint date range
+      const start = new Date(sprint.start_date);
+      const end = new Date(sprint.end_date);
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+
+      // Build lookup from actual daily data
+      const dailyMap = new Map<string, { remaining: number; completed: number; scope: number }>();
+      progressDaily.forEach((d) => {
+        dailyMap.set(d.date, {
           remaining: Number(d.remaining_points ?? 0),
-          ideal: Math.max(0, totalEstimate - (totalEstimate / (sprintDays - 1)) * i),
-        }));
-        burnupData = progressDaily.map((d) => ({
-          date: new Date(d.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
           completed: Number(d.completed_points ?? 0),
           scope: Number(d.total_scope_points ?? 0),
-        }));
-      } else if (totalEstimate > 0) {
-        // Fallback: generate synthetic burndown/burnup from sprint dates and current totals
-        const start = new Date(sprint.start_date);
-        const end = new Date(sprint.end_date);
-        const today = new Date();
-        const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000));
-        const elapsed = Math.min(totalDays, Math.max(0, Math.round((today.getTime() - start.getTime()) / 86400000)));
+        });
+      });
 
-        for (let i = 0; i <= totalDays; i++) {
-          const d = new Date(start);
-          d.setDate(d.getDate() + i);
-          const label = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-          const ideal = Math.max(0, totalEstimate - (totalEstimate / totalDays) * i);
+      const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000));
 
-          if (i <= elapsed) {
-            // Interpolate remaining from totalEstimate to current remaining
-            const progress = elapsed > 0 ? i / elapsed : 1;
-            const remaining = totalEstimate - (totalEstimate - totalRemaining) * progress;
-            const completed = totalCompleted * progress;
-            burndownData.push({ date: label, remaining: Math.round(remaining * 100) / 100, ideal: Math.round(ideal * 100) / 100 });
-            burnupData.push({ date: label, completed: Math.round(completed * 100) / 100, scope: totalEstimate });
-          } else {
-            burndownData.push({ date: label, remaining: 0, ideal: Math.round(ideal * 100) / 100 });
-            burnupData.push({ date: label, completed: 0, scope: totalEstimate });
-          }
+      for (let i = 0; i <= totalDays; i++) {
+        const d = new Date(start);
+        d.setDate(d.getDate() + i);
+        const label = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+        const dateKey = d.toISOString().split("T")[0];
+        const ideal = totalDays > 0
+          ? Math.max(0, Math.round((totalEstimate - (totalEstimate / totalDays) * i) * 100) / 100)
+          : 0;
+
+        const actual = dailyMap.get(dateKey);
+
+        if (actual) {
+          burndownData.push({ date: label, remaining: actual.remaining, ideal });
+          burnupData.push({ date: label, completed: actual.completed, scope: actual.scope });
+        } else if (d <= today) {
+          // Past date with no data — use last known values or interpolate
+          const lastBurndown = burndownData.length > 0 ? burndownData[burndownData.length - 1].remaining : totalEstimate;
+          const lastBurnup = burnupData.length > 0 ? burnupData[burnupData.length - 1] : { completed: 0, scope: totalEstimate };
+          burndownData.push({ date: label, remaining: lastBurndown, ideal });
+          burnupData.push({ date: label, completed: lastBurnup.completed, scope: lastBurnup.scope });
+        } else {
+          // Future date — only ideal line
+          burndownData.push({ date: label, remaining: undefined as any, ideal });
+          burnupData.push({ date: label, completed: undefined as any, scope: undefined as any });
         }
       }
 
