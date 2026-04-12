@@ -19,7 +19,7 @@ export function useSprintDetailData(sprintId?: string) {
         : sprints[0];
 
       // Fetch work items and metrics for the selected sprint
-      const [workItemsRes, metricsRes, progressRes] = await Promise.all([
+      const [workItemsRes, metricsRes, progressRes, usersRes] = await Promise.all([
         supabase
           .from("work_items")
           .select("id, type, title, state, story_points, original_estimate, remaining_work, completed_work, is_spillover, assigned_to_user_id, created_at, completed_at")
@@ -36,11 +36,20 @@ export function useSprintDetailData(sprintId?: string) {
           .select("date, remaining_points, completed_points, total_scope_points")
           .eq("sprint_id", sprint.id)
           .order("date", { ascending: true }),
+        supabase
+          .from("users")
+          .select("id, name"),
       ]);
 
       if (workItemsRes.error) throw workItemsRes.error;
 
-      const workItems = workItemsRes.data || [];
+      const usersMap = new Map<string, string>();
+      (usersRes.data || []).forEach((u) => usersMap.set(u.id, u.name));
+
+      const workItems = (workItemsRes.data || []).map((wi) => ({
+        ...wi,
+        assigned_to_name: wi.assigned_to_user_id ? usersMap.get(wi.assigned_to_user_id) || "—" : "—",
+      }));
       const metrics = metricsRes.data;
       const progressDaily = progressRes.data || [];
 

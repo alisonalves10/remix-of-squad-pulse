@@ -289,14 +289,15 @@ const SprintDetail = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Título</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Estimativa (h)</TableHead>
-                    <TableHead className="text-right">Restante (h)</TableHead>
-                    <TableHead className="text-right">Concluído (h)</TableHead>
-                    <TableHead>Concluído em</TableHead>
+                     <TableHead>ID</TableHead>
+                     <TableHead>Tipo</TableHead>
+                     <TableHead>Título</TableHead>
+                     <TableHead>Responsável</TableHead>
+                     <TableHead>Estado</TableHead>
+                     <TableHead className="text-right">Estimativa (h)</TableHead>
+                     <TableHead className="text-right">Restante (h)</TableHead>
+                     <TableHead className="text-right">Concluído (h)</TableHead>
+                     <TableHead>Concluído em</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -304,11 +305,12 @@ const SprintDetail = () => {
                     <TableRow key={item.id}>
                       <TableCell className="font-mono text-sm">{item.id}</TableCell>
                       <TableCell>{getTypeBadge(item.type)}</TableCell>
-                      <TableCell className="max-w-[300px] truncate">{item.title}</TableCell>
-                      <TableCell>{getStateBadge(item.state)}</TableCell>
-                      <TableCell className="text-right font-mono">
-                        {Number(item.original_estimate) || "—"}
-                      </TableCell>
+                       <TableCell className="max-w-[300px] truncate">{item.title}</TableCell>
+                       <TableCell className="text-sm">{(item as any).assigned_to_name || "—"}</TableCell>
+                       <TableCell>{getStateBadge(item.state)}</TableCell>
+                       <TableCell className="text-right font-mono">
+                         {Number(item.original_estimate) || "—"}
+                       </TableCell>
                       <TableCell className="text-right font-mono">
                         {Number(item.remaining_work) || "—"}
                       </TableCell>
@@ -322,7 +324,7 @@ const SprintDetail = () => {
                   ))}
                   {filteredItems.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                         Nenhum item encontrado com os filtros aplicados.
                       </TableCell>
                     </TableRow>
