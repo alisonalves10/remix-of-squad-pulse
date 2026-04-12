@@ -68,6 +68,8 @@ const SprintDetail = () => {
     commitment,
     types,
     states,
+    burndownData,
+    burnupData,
   } = data;
 
   const filteredItems = workItems.filter((item) => {
@@ -222,6 +224,22 @@ const SprintDetail = () => {
             variant={bugsResolved >= bugsCreated ? "success" : "danger"}
           />
         </div>
+
+        {/* Burndown & Burnup Charts */}
+        {burndownData.length > 0 && (
+          <div className="grid gap-6 md:grid-cols-2">
+            <BurndownChart
+              data={burndownData}
+              title="Burndown (Horas)"
+              description="Remaining Work ao longo da sprint"
+            />
+            <BurnupChart
+              data={burnupData}
+              title="Burnup (Horas)"
+              description="Completed Work vs Escopo Total"
+            />
+          </div>
+        )}
 
         {/* Work Items Table */}
         <Card className="shadow-card">
