@@ -19,7 +19,7 @@ export function useSprintDetailData(sprintId?: string) {
         : sprints[0];
 
       // Fetch work items and metrics for the selected sprint
-      const [workItemsRes, metricsRes] = await Promise.all([
+      const [workItemsRes, metricsRes, progressRes] = await Promise.all([
         supabase
           .from("work_items")
           .select("id, type, title, state, story_points, original_estimate, remaining_work, completed_work, is_spillover, assigned_to_user_id, created_at, completed_at")
@@ -31,6 +31,11 @@ export function useSprintDetailData(sprintId?: string) {
           .eq("sprint_id", sprint.id)
           .eq("squad_id", sprint.squad_id)
           .single(),
+        supabase
+          .from("sprint_progress_daily")
+          .select("date, remaining_points, completed_points, total_scope_points")
+          .eq("sprint_id", sprint.id)
+          .order("date", { ascending: true }),
       ]);
 
       if (workItemsRes.error) throw workItemsRes.error;
