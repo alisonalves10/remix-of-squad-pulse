@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
 
     for (const areaPath of areaPaths) {
       try {
-        const result = await syncAreaPath(supabase, organization, project, areaPath, azureHeaders);
+        const result = await syncAreaPath(supabase, organization, project, areaPath, azureHeaders, headers);
         results.push(result);
       } catch (err) {
         console.error(`Error syncing area path ${areaPath}:`, err);
@@ -361,5 +361,82 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
     await supabase.from("metrics_snapshot").insert({ sprint_id: sprint.id, squad_id: squadId, ...metricsPayload });
   }
 
+  // --- Backfill historical daily data from Azure Analytics OData API ---
+  await backfillDailyProgress(supabase, organization, project, iterPath, sprint.id, startDate, endDate, azureHeaders);
+
   return { areaPath, synced: totalSynced, sprint: sprintName, squad: squadName };
+}
+
+async function backfillDailyProgress(
+  supabase: any,
+  organization: string,
+  project: string,
+  iterationPath: string,
+  sprintId: string,
+  startDate: string,
+  endDate: string,
+  headers: Record<string, string>
+) {
+  try {
+    // Use today or endDate, whichever is earlier, as the upper bound for backfill
+    const today = new Date().toISOString().split("T")[0];
+    const upperDate = today < endDate ? today : endDate;
+
+    const filterClause = [
+      `Iteration/IterationPath eq '${iterationPath}'`,
+      `DateValue ge ${startDate}Z`,
+      `DateValue le ${upperDate}Z`,
+      `WorkItemType in ('Task','Bug','Issue','Speed')`,
+    ].join(" and ");
+
+    const applyClause = `filter(${filterClause})/groupby((DateValue),aggregate(RemainingWork with sum as TotalRemaining,CompletedWork with sum as TotalCompleted,OriginalEstimate with sum as TotalEstimate))`;
+
+    const url = `https://analytics.dev.azure.com/${encodeURIComponent(organization)}/${encodeURIComponent(project)}/_odata/v3.0-preview/WorkItemSnapshot?$apply=${encodeURIComponent(applyClause)}&$orderby=DateValue asc`;
+
+    console.log(`[backfill] Fetching OData for sprint ${sprintId}: ${startDate} to ${upperDate}`);
+    const res = await fetch(url, { headers });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[backfill] OData API error ${res.status}: ${errText}`);
+      return;
+    }
+
+    const data = await res.json();
+    const rows = data.value || [];
+    console.log(`[backfill] Got ${rows.length} daily snapshots from OData`);
+
+    for (const row of rows) {
+      const dateVal = (row.DateValue || "").split("T")[0];
+      if (!dateVal) continue;
+
+      const remaining = row.TotalRemaining ?? 0;
+      const completed = row.TotalCompleted ?? 0;
+      const scope = row.TotalEstimate ?? 0;
+
+      const { data: existing } = await supabase
+        .from("sprint_progress_daily")
+        .select("id")
+        .eq("sprint_id", sprintId)
+        .eq("date", dateVal)
+        .single();
+
+      const payload = {
+        sprint_id: sprintId,
+        date: dateVal,
+        remaining_points: remaining,
+        completed_points: completed,
+        total_scope_points: scope,
+      };
+
+      if (existing) {
+        await supabase.from("sprint_progress_daily").update(payload).eq("id", existing.id);
+      } else {
+        await supabase.from("sprint_progress_daily").insert(payload);
+      }
+    }
+    console.log(`[backfill] Done upserting ${rows.length} rows for sprint ${sprintId}`);
+  } catch (err) {
+    console.error("[backfill] Error:", err);
+  }
 }
