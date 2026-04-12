@@ -386,7 +386,7 @@ async function backfillDailyProgress(
       `Iteration/IterationPath eq '${iterationPath}'`,
       `DateValue ge ${startDate}Z`,
       `DateValue le ${upperDate}Z`,
-      `WorkItemType in ('Task','Bug','Issue','Speed')`,
+      `(WorkItemType eq 'Task' or WorkItemType eq 'Bug' or WorkItemType eq 'Issue' or WorkItemType eq 'Speed')`,
     ].join(" and ");
 
     const applyClause = `filter(${filterClause})/groupby((DateValue),aggregate(RemainingWork with sum as TotalRemaining,CompletedWork with sum as TotalCompleted,OriginalEstimate with sum as TotalEstimate))`;
