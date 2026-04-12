@@ -43,7 +43,13 @@ export function useSprintDetailData(sprintId?: string) {
 
       if (workItemsRes.error) throw workItemsRes.error;
 
-      const workItems = workItemsRes.data || [];
+      const usersMap = new Map<string, string>();
+      (usersRes.data || []).forEach((u) => usersMap.set(u.id, u.name));
+
+      const workItems = (workItemsRes.data || []).map((wi) => ({
+        ...wi,
+        assigned_to_name: wi.assigned_to_user_id ? usersMap.get(wi.assigned_to_user_id) || "—" : "—",
+      }));
       const metrics = metricsRes.data;
       const progressDaily = progressRes.data || [];
 
