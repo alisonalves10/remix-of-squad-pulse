@@ -295,6 +295,37 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
     totalSynced++;
   }
 
+  // --- Populate sprint_progress_daily for today ---
+  const chartTypes = ["Task", "Issue", "Bug", "Speed"];
+  const chartItems = workItems.filter(wi => chartTypes.includes(wi.fields["System.WorkItemType"] || ""));
+  const todayRemaining = chartItems.reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.RemainingWork"] || 0), 0);
+  const todayCompleted = chartItems.reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.CompletedWork"] || 0), 0);
+  const todayScope = chartItems.reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.OriginalEstimate"] || 0), 0);
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  const { data: existingProgress } = await supabase
+    .from("sprint_progress_daily")
+    .select("id")
+    .eq("sprint_id", sprint.id)
+    .eq("date", todayStr)
+    .single();
+
+  const progressPayload = {
+    sprint_id: sprint.id,
+    date: todayStr,
+    remaining_points: todayRemaining,
+    completed_points: todayCompleted,
+    total_scope_points: todayScope,
+  };
+
+  if (existingProgress) {
+    await supabase.from("sprint_progress_daily").update(progressPayload).eq("id", existingProgress.id);
+  } else {
+    await supabase.from("sprint_progress_daily").insert(progressPayload);
+  }
+  console.log(`[${areaPath}] sprint_progress_daily updated for ${todayStr}: remaining=${todayRemaining}, completed=${todayCompleted}, scope=${todayScope}`);
+
+  // --- Metrics snapshot ---
   const planned = workItems.reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.StoryPoints"] || 0), 0);
   const completed = workItems.filter(wi => ["Done", "Closed"].includes(wi.fields["System.State"])).reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.StoryPoints"] || 0), 0);
   const plannedHours = workItems.reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.OriginalEstimate"] || 0), 0);
