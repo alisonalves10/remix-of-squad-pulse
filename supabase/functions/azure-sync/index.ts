@@ -121,7 +121,8 @@ async function syncAreaPath(
   organization: string,
   project: string,
   areaPath: string,
-  azureHeaders: Record<string, string>
+  azureHeaders: Record<string, string>,
+  rawHeaders?: Record<string, string>
 ): Promise<SyncResult> {
   const teamAzureBase = `https://dev.azure.com/${organization}/${project}/${encodeURIComponent(areaPath)}`;
   const azureBase = `https://dev.azure.com/${organization}/${project}`;
