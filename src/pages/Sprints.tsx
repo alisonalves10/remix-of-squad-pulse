@@ -289,14 +289,15 @@ const SprintDetail = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Título</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Estimativa (h)</TableHead>
-                    <TableHead className="text-right">Restante (h)</TableHead>
-                    <TableHead className="text-right">Concluído (h)</TableHead>
-                    <TableHead>Concluído em</TableHead>
+                     <TableHead>ID</TableHead>
+                     <TableHead>Tipo</TableHead>
+                     <TableHead>Título</TableHead>
+                     <TableHead>Responsável</TableHead>
+                     <TableHead>Estado</TableHead>
+                     <TableHead className="text-right">Estimativa (h)</TableHead>
+                     <TableHead className="text-right">Restante (h)</TableHead>
+                     <TableHead className="text-right">Concluído (h)</TableHead>
+                     <TableHead>Concluído em</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
