@@ -44,21 +44,52 @@ export function useSprintDetailData(sprintId?: string) {
       const metrics = metricsRes.data;
       const progressDaily = progressRes.data || [];
 
-      // Build burndown data
       const totalEstimate = Number(metrics?.planned_hours ?? 0);
-      const sprintDays = progressDaily.length || 1;
-      const burndownData = progressDaily.map((d, i) => ({
-        date: new Date(d.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
-        remaining: Number(d.remaining_points ?? 0),
-        ideal: Math.max(0, totalEstimate - (totalEstimate / (sprintDays - 1)) * i),
-      }));
+      const totalCompleted = Number(metrics?.completed_hours ?? 0);
+      const totalRemaining = workItems.reduce((sum, wi) => sum + Number(wi.remaining_work ?? 0), 0);
 
-      // Build burnup data
-      const burnupData = progressDaily.map((d) => ({
-        date: new Date(d.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
-        completed: Number(d.completed_points ?? 0),
-        scope: Number(d.total_scope_points ?? 0),
-      }));
+      let burndownData: Array<{ date: string; remaining: number; ideal: number }> = [];
+      let burnupData: Array<{ date: string; completed: number; scope: number }> = [];
+
+      if (progressDaily.length > 0) {
+        const sprintDays = progressDaily.length;
+        burndownData = progressDaily.map((d, i) => ({
+          date: new Date(d.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+          remaining: Number(d.remaining_points ?? 0),
+          ideal: Math.max(0, totalEstimate - (totalEstimate / (sprintDays - 1)) * i),
+        }));
+        burnupData = progressDaily.map((d) => ({
+          date: new Date(d.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+          completed: Number(d.completed_points ?? 0),
+          scope: Number(d.total_scope_points ?? 0),
+        }));
+      } else if (totalEstimate > 0) {
+        // Fallback: generate synthetic burndown/burnup from sprint dates and current totals
+        const start = new Date(sprint.start_date);
+        const end = new Date(sprint.end_date);
+        const today = new Date();
+        const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000));
+        const elapsed = Math.min(totalDays, Math.max(0, Math.round((today.getTime() - start.getTime()) / 86400000)));
+
+        for (let i = 0; i <= totalDays; i++) {
+          const d = new Date(start);
+          d.setDate(d.getDate() + i);
+          const label = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+          const ideal = Math.max(0, totalEstimate - (totalEstimate / totalDays) * i);
+
+          if (i <= elapsed) {
+            // Interpolate remaining from totalEstimate to current remaining
+            const progress = elapsed > 0 ? i / elapsed : 1;
+            const remaining = totalEstimate - (totalEstimate - totalRemaining) * progress;
+            const completed = totalCompleted * progress;
+            burndownData.push({ date: label, remaining: Math.round(remaining * 100) / 100, ideal: Math.round(ideal * 100) / 100 });
+            burnupData.push({ date: label, completed: Math.round(completed * 100) / 100, scope: totalEstimate });
+          } else {
+            burndownData.push({ date: label, remaining: 0, ideal: Math.round(ideal * 100) / 100 });
+            burnupData.push({ date: label, completed: 0, scope: totalEstimate });
+          }
+        }
+      }
 
       const totalItems = workItems.length;
       const completedItems = workItems.filter((wi) =>
