@@ -383,7 +383,7 @@ async function backfillDailyProgress(
     const today = new Date().toISOString().split("T")[0];
     const upperDate = today < endDate ? today : endDate;
 
-    const fullAreaPath = `${project}\\\\${areaPath}`;
+    const fullAreaPath = `${project}\\${areaPath}`;
     const filterClause = [
       `Iteration/IterationPath eq '${iterationPath}'`,
       `Area/AreaPath eq '${fullAreaPath}'`,
