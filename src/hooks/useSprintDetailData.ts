@@ -61,10 +61,9 @@ export function useSprintDetailData(sprintId?: string) {
       const totalCompleted = chartItems.reduce((sum, wi) => sum + Number(wi.completed_work ?? 0), 0);
       const totalRemaining = chartItems.reduce((sum, wi) => sum + Number(wi.remaining_work ?? 0), 0);
 
-      let burndownData: Array<{ date: string; remaining: number; ideal: number }> = [];
-      let burnupData: Array<{ date: string; completed: number; scope: number }> = [];
+      let burndownData: Array<{ date: string; remaining: number | null; ideal: number }> = [];
+      let burnupData: Array<{ date: string; completed: number | null; scope: number | null }> = [];
 
-      // Always generate full sprint date range
       const start = new Date(sprint.start_date);
       const end = new Date(sprint.end_date);
       const today = new Date();
@@ -72,40 +71,55 @@ export function useSprintDetailData(sprintId?: string) {
 
       // Build lookup from actual daily data
       const dailyMap = new Map<string, { remaining: number; completed: number; scope: number }>();
+      let lastActualDate = end;
       progressDaily.forEach((d) => {
         dailyMap.set(d.date, {
           remaining: Number(d.remaining_points ?? 0),
           completed: Number(d.completed_points ?? 0),
           scope: Number(d.total_scope_points ?? 0),
         });
+        const dd = new Date(d.date);
+        if (dd > lastActualDate) lastActualDate = dd;
       });
 
-      const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000));
+      // Timeline goes from start to max(end, lastActualDate)
+      const timelineEnd = lastActualDate > end ? lastActualDate : end;
+      const sprintDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000));
+      const totalTimelineDays = Math.round((timelineEnd.getTime() - start.getTime()) / 86400000);
 
-      for (let i = 0; i <= totalDays; i++) {
+      let hasSeenActual = false;
+
+      for (let i = 0; i <= totalTimelineDays; i++) {
         const d = new Date(start);
         d.setDate(d.getDate() + i);
         const label = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
         const dateKey = d.toISOString().split("T")[0];
-        const ideal = totalDays > 0
-          ? Math.max(0, Math.round((totalEstimate - (totalEstimate / totalDays) * i) * 100) / 100)
+
+        // Ideal line only spans the official sprint range
+        const ideal = i <= sprintDays
+          ? Math.max(0, Math.round((totalEstimate - (totalEstimate / sprintDays) * i) * 100) / 100)
           : 0;
 
         const actual = dailyMap.get(dateKey);
 
         if (actual) {
+          hasSeenActual = true;
           burndownData.push({ date: label, remaining: actual.remaining, ideal });
           burnupData.push({ date: label, completed: actual.completed, scope: actual.scope });
-        } else if (d <= today) {
-          // Past date with no data — use last known values or interpolate
-          const lastBurndown = burndownData.length > 0 ? burndownData[burndownData.length - 1].remaining : totalEstimate;
-          const lastBurnup = burnupData.length > 0 ? burnupData[burnupData.length - 1] : { completed: 0, scope: totalEstimate };
-          burndownData.push({ date: label, remaining: lastBurndown, ideal });
-          burnupData.push({ date: label, completed: lastBurnup.completed, scope: lastBurnup.scope });
-        } else {
+        } else if (d <= today && hasSeenActual) {
+          // Past date after first snapshot — carry last known values
+          const lastRemaining = burndownData.filter(b => b.remaining !== null).slice(-1)[0]?.remaining ?? null;
+          const lastBurnup = burnupData.filter(b => b.completed !== null).slice(-1)[0];
+          burndownData.push({ date: label, remaining: lastRemaining, ideal });
+          burnupData.push({ date: label, completed: lastBurnup?.completed ?? null, scope: lastBurnup?.scope ?? null });
+        } else if (d > today) {
           // Future date — only ideal line
-          burndownData.push({ date: label, remaining: undefined as any, ideal });
-          burnupData.push({ date: label, completed: undefined as any, scope: undefined as any });
+          burndownData.push({ date: label, remaining: null, ideal });
+          burnupData.push({ date: label, completed: null, scope: null });
+        } else {
+          // Past date before first snapshot — no actual data
+          burndownData.push({ date: label, remaining: null, ideal });
+          burnupData.push({ date: label, completed: null, scope: null });
         }
       }
 

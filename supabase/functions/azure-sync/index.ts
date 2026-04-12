@@ -307,7 +307,10 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
   const todayRemaining = chartItems.reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.RemainingWork"] || 0), 0);
   const todayCompleted = chartItems.reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.CompletedWork"] || 0), 0);
   const todayScope = chartItems.reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.OriginalEstimate"] || 0), 0);
-  const todayStr = new Date().toISOString().split("T")[0];
+  // Clamp snapshot date to sprint end_date to avoid data outside the chart range
+  const todayRaw = new Date().toISOString().split("T")[0];
+  const sprintEndStr = sprint.end_date;
+  const todayStr = todayRaw > sprintEndStr ? sprintEndStr : todayRaw;
 
   const { data: existingProgress } = await supabase
     .from("sprint_progress_daily")

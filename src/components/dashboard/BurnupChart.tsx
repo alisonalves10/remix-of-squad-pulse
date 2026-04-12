@@ -55,6 +55,9 @@ export function BurnupChart({ data, title = "Burnup Chart", description }: Burnu
                 strokeWidth={3}
                 fill="url(#colorCompleted)"
                 name="Concluído"
+                dot={{ fill: 'hsl(var(--primary))', r: 4 }}
+                activeDot={{ r: 6, fill: 'hsl(var(--primary))' }}
+                connectNulls={false}
               />
               <Area 
                 type="stepAfter" 
@@ -64,6 +67,8 @@ export function BurnupChart({ data, title = "Burnup Chart", description }: Burnu
                 strokeDasharray="5 5"
                 fill="transparent"
                 name="Escopo Total"
+                dot={{ fill: 'hsl(var(--success))', r: 3 }}
+                connectNulls={false}
               />
             </AreaChart>
           </ResponsiveContainer>
