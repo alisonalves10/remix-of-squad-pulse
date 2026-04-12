@@ -153,7 +153,7 @@ async function syncAreaPath(
   }
 
   const workItems = await fetchWorkItemDetails(azureBase, azureHeaders, workItemIds);
-  return await syncToDatabase(supabase, workItems, organization, project, areaPath, currentIteration);
+  return await syncToDatabase(supabase, workItems, organization, project, areaPath, currentIteration, azureHeaders);
 }
 
 async function fetchCurrentIteration(teamAzureBase: string, headers: Record<string, string>): Promise<IterationInfo | null> {
@@ -195,7 +195,7 @@ async function fetchWorkItemDetails(azureBase: string, headers: Record<string, s
   return allItems;
 }
 
-async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: string, project: string, areaPath: string, currentIteration: IterationInfo | null): Promise<SyncResult> {
+async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: string, project: string, areaPath: string, currentIteration: IterationInfo | null, azureHeaders: Record<string, string>): Promise<SyncResult> {
   const squadName = areaPath;
   const { data: squadData } = await supabase
     .from("squads")
