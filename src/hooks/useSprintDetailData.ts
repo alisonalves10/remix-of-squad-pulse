@@ -44,9 +44,13 @@ export function useSprintDetailData(sprintId?: string) {
       const metrics = metricsRes.data;
       const progressDaily = progressRes.data || [];
 
-      const totalEstimate = Number(metrics?.planned_hours ?? 0);
-      const totalCompleted = Number(metrics?.completed_hours ?? 0);
-      const totalRemaining = workItems.reduce((sum, wi) => sum + Number(wi.remaining_work ?? 0), 0);
+      // Filter work items for chart calculations (only Task, Issue, Bug, Speed)
+      const chartTypes = ["Task", "Issue", "Bug", "Speed"];
+      const chartItems = workItems.filter((wi) => chartTypes.includes(wi.type));
+
+      const totalEstimate = chartItems.reduce((sum, wi) => sum + Number(wi.original_estimate ?? 0), 0);
+      const totalCompleted = chartItems.reduce((sum, wi) => sum + Number(wi.completed_work ?? 0), 0);
+      const totalRemaining = chartItems.reduce((sum, wi) => sum + Number(wi.remaining_work ?? 0), 0);
 
       let burndownData: Array<{ date: string; remaining: number; ideal: number }> = [];
       let burnupData: Array<{ date: string; completed: number; scope: number }> = [];
