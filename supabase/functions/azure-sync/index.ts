@@ -362,7 +362,7 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
   }
 
   // --- Backfill historical daily data from Azure Analytics OData API ---
-  await backfillDailyProgress(supabase, org, project, iterPath, sprint.id, startDate, endDate, azureHeaders);
+  await backfillDailyProgress(supabase, org, project, areaPath, iterPath, sprint.id, startDate, endDate, azureHeaders);
 
   return { areaPath, synced: totalSynced, sprint: sprintName, squad: squadName };
 }
@@ -371,6 +371,7 @@ async function backfillDailyProgress(
   supabase: any,
   organization: string,
   project: string,
+  areaPath: string,
   iterationPath: string,
   sprintId: string,
   startDate: string,
@@ -382,11 +383,13 @@ async function backfillDailyProgress(
     const today = new Date().toISOString().split("T")[0];
     const upperDate = today < endDate ? today : endDate;
 
+    const fullAreaPath = `${project}\\${areaPath}`;
     const filterClause = [
       `Iteration/IterationPath eq '${iterationPath}'`,
+      `Area/AreaPath eq '${fullAreaPath}'`,
       `DateValue ge ${startDate}Z`,
       `DateValue le ${upperDate}Z`,
-      `WorkItemType in ('Task','Bug','Issue','Speed')`,
+      `(WorkItemType eq 'Task' or WorkItemType eq 'Bug' or WorkItemType eq 'Issue' or WorkItemType eq 'Speed')`,
     ].join(" and ");
 
     const applyClause = `filter(${filterClause})/groupby((DateValue),aggregate(RemainingWork with sum as TotalRemaining,CompletedWork with sum as TotalCompleted,OriginalEstimate with sum as TotalEstimate))`;
