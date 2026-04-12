@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
 
     for (const areaPath of areaPaths) {
       try {
-        const result = await syncAreaPath(supabase, organization, project, areaPath, azureHeaders, headers);
+        const result = await syncAreaPath(supabase, organization, project, areaPath, azureHeaders);
         results.push(result);
       } catch (err) {
         console.error(`Error syncing area path ${areaPath}:`, err);
@@ -121,8 +121,7 @@ async function syncAreaPath(
   organization: string,
   project: string,
   areaPath: string,
-  azureHeaders: Record<string, string>,
-  rawHeaders?: Record<string, string>
+  azureHeaders: Record<string, string>
 ): Promise<SyncResult> {
   const teamAzureBase = `https://dev.azure.com/${organization}/${project}/${encodeURIComponent(areaPath)}`;
   const azureBase = `https://dev.azure.com/${organization}/${project}`;
