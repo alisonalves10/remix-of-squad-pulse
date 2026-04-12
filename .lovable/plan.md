@@ -1,21 +1,17 @@
 
 
-# Plan: Filter burndown/burnup charts by work item type
+# Plan: Update area paths and re-sync
 
-## Problem
-The burndown and burnup charts currently use **all** work items. They should only consider items of type **Task**, **Issue**, **Bug**, and **Speed** — excluding User Stories, Features, Epics, etc.
+## Steps
 
-## Changes
+1. **Update `azure_config`** — Use the insert tool to run an `UPDATE` setting `area_paths` to `ARRAY['Backoffice','E-commerce','Logistica','Vendas','Sellers e Produtos']` on the existing config row.
 
-### 1. `src/hooks/useSprintDetailData.ts`
-- After fetching `workItems`, create a filtered subset containing only items where `type` is one of `["Task", "Issue", "Bug", "Speed"]`
-- Use this filtered subset to calculate:
-  - `totalEstimate` (sum of `original_estimate`)
-  - `totalCompleted` (sum of `completed_work`)
-  - `totalRemaining` (sum of `remaining_work`)
-- These filtered totals feed the burndown and burnup chart data generation (both the `sprint_progress_daily` path and the synthetic fallback path)
-- The KPIs and work items table continue using the full `workItems` array (all types)
+2. **Trigger sync** — Call the `azure-sync` Edge Function via `curl_edge_functions` to re-run synchronization for all five squads.
 
-### Files changed
-- `src/hooks/useSprintDetailData.ts` — add type filter for chart calculations
+3. **Verify** — Query `sprint_progress_daily` joined with `sprints`/`squads` to confirm daily records were created for each squad.
+
+## Technical details
+- Single `UPDATE` on `azure_config` table
+- Edge function already reads `area_paths` from config when body doesn't provide them
+- No schema or code changes needed
 
