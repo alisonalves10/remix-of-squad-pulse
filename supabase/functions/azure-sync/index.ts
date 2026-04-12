@@ -363,7 +363,7 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
   }
 
   // --- Backfill historical daily data from Azure Analytics OData API ---
-  await backfillDailyProgress(supabase, organization, project, iterPath, sprint.id, startDate, endDate, azureHeaders);
+  await backfillDailyProgress(supabase, org, project, iterPath, sprint.id, startDate, endDate, azureHeaders);
 
   return { areaPath, synced: totalSynced, sprint: sprintName, squad: squadName };
 }
