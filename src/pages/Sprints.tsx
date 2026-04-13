@@ -123,6 +123,7 @@ const SprintDetail = () => {
     sprintsBySquad,
     allSprints,
     workItems,
+    hierarchyTree,
     totalItems,
     completedItems,
     spilloverItems,
