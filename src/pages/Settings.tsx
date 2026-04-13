@@ -100,7 +100,37 @@ const Settings = () => {
     }
   };
 
-  const handleSync = async () => {
+  const handleDiscoverAreaPaths = async () => {
+    if (!config.organization || !config.project) {
+      toast({ title: "Configure primeiro", description: "Preencha organização e projeto antes de buscar.", variant: "destructive" });
+      return;
+    }
+    setIsLoadingAreas(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("azure-list-areas");
+      if (error) {
+        toast({ title: "Erro ao buscar", description: error.message, variant: "destructive" });
+      } else if (data?.error) {
+        toast({ title: "Erro", description: data.error, variant: "destructive" });
+      } else {
+        setAvailableAreaPaths(data.areaPaths || []);
+        toast({ title: "Area Paths encontrados", description: `${(data.areaPaths || []).length} Area Paths disponíveis no projeto.` });
+      }
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    }
+    setIsLoadingAreas(false);
+  };
+
+  const handleToggleAreaPath = (path: string) => {
+    if (areaPaths.includes(path)) {
+      setAreaPaths(areaPaths.filter((p) => p !== path));
+    } else {
+      setAreaPaths([...areaPaths, path]);
+    }
+  };
+
+
     if (areaPaths.length === 0) {
       toast({ title: "Nenhum Area Path", description: "Adicione pelo menos um Area Path para sincronizar.", variant: "destructive" });
       return;
