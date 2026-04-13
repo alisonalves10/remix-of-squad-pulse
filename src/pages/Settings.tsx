@@ -360,10 +360,16 @@ const Settings = () => {
               )}
             </div>
 
-            <Button variant="outline" onClick={handleSync} disabled={isSyncing || areaPaths.length === 0}>
-              <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
-              {isSyncing ? "Sincronizando..." : `Sincronizar ${areaPaths.length} Time(s)`}
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => handleSync(false)} disabled={isSyncing || areaPaths.length === 0}>
+                <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+                {isSyncing ? "Sincronizando..." : `Sincronizar ${areaPaths.length} Time(s)`}
+              </Button>
+              <Button variant="secondary" onClick={() => handleSync(true)} disabled={isSyncing || areaPaths.length === 0}>
+                <History className={`mr-2 h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+                Carregar Histórico 2026
+              </Button>
+            </div>
 
             {syncProgress && (
               <div className="space-y-2 mt-2">
