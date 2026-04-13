@@ -1,28 +1,54 @@
 
 
-# Fix: WIQL falha com backslash no início do iteration path
+# Carregar histórico de todas as sprints de 2026
 
-## Problema
-A Classification Nodes API retorna paths como `\Webcontinental\2026 - Sprint 8` (com `\` no início). O WIQL do Azure DevOps rejeita paths que começam com backslash (erro `TF51008`). Isso afeta todos os times que usam o fallback de Classification Nodes (Infraestrutura, Arquitetura e Inovação, B2B e Instalação, Segurança da Informação, Pós Venda).
-
-Os times Backoffice, Vendas, Logística, Sellers e Produtos, Dados e Analytics e E-Commerce funcionam porque obtêm o path sem backslash inicial via a API de team settings.
+## Problema atual
+A edge function `azure-sync` tem dois blocos que impedem manter histórico:
+1. **Linhas 348-368**: Apaga sprints "stale" — qualquer sprint com iteration path diferente da atual é removida junto com seus work items, métricas e progresso diário
+2. **Só sincroniza a iteração corrente** — não há mecanismo para solicitar sprints passadas
 
 ## Solução
 
-**Arquivo: `supabase/functions/azure-sync/index.ts`**
+### 1. Remover a limpeza de sprints antigas (`azure-sync/index.ts`)
+Remover completamente o bloco que deleta sprints com iteration path diferente (linhas 348-368). Isso preserva dados históricos.
 
-Na função `findNodeByDate` (linha 296), após limpar o path de `\Iteration\`, adicionar remoção do backslash inicial:
+### 2. Adicionar modo de sincronização histórica (`azure-sync/index.ts`)
+Aceitar um parâmetro opcional `syncAllIterations: true` no body da requisição. Quando ativado:
+- Usar a Classification Nodes API para listar **todas** as iterações de 2026 (filtrar por nome contendo "2026")
+- Para cada iteração encontrada, executar a mesma lógica de sync (WIQL + work items + backfill)
+- Cada iteração cria/atualiza sua própria sprint no banco
 
-```typescript
-const cleanPath = rawPath
-  .replace(/\\Iteration\\/, "\\")
-  .replace(/\\Iteration$/, "")
-  .replace(/^\\/, "");  // Remove leading backslash
+A função `syncAreaPath` será refatorada para aceitar uma iteração específica como parâmetro opcional. Quando fornecida, usa essa iteração em vez de buscar a corrente.
+
+### 3. Adicionar botão "Sincronizar Histórico" na UI (`src/pages/Settings.tsx`)
+Um botão secundário ao lado do botão de sync atual que envia `{ areaPaths: [...], syncAllIterations: true }`. Isso dispara a carga de todas as sprints 2026 para todos os times configurados.
+
+### 4. Listar todas as iterações do projeto
+Nova função `findAllIterations2026` que usa a Classification Nodes API, percorre a árvore e retorna todas as iterações cujo nome começa com "2026".
+
+## Fluxo técnico
+
+```text
+Request: { areaPaths: ["Backoffice", ...], syncAllIterations: true }
+                    │
+    ┌───────────────┴───────────────┐
+    │  Para cada areaPath:          │
+    │  1. Classification Nodes API  │
+    │  2. Filtrar iterações "2026"  │
+    │  3. Para cada iteração:       │
+    │     - WIQL com iteration path │
+    │     - Fetch work items        │
+    │     - Upsert sprint/items     │
+    │     - Backfill OData          │
+    └───────────────────────────────┘
 ```
 
-Isso transforma `\Webcontinental\2026 - Sprint 8` em `Webcontinental\2026 - Sprint 8`, que é o formato aceito pelo WIQL.
+## Arquivos alterados
+- `supabase/functions/azure-sync/index.ts` — remover cleanup de sprints stale; adicionar `syncAllIterations`; refatorar `syncAreaPath` para aceitar iteração específica; nova função `findAllIterations2026`
+- `src/pages/Settings.tsx` — botão "Carregar Histórico 2026"
 
-## Impacto
-- Corrige sincronização de 5 times que atualmente falham
-- Não afeta times que já funcionam (eles não passam pelo fallback)
+## Observações
+- O sync normal (sem `syncAllIterations`) continua funcionando igual, mas sem deletar sprints antigas
+- O histórico é carregado uma vez; syncs subsequentes atualizam apenas a sprint corrente
+- Sprints passadas terão `is_closed: true` se a end_date for anterior a hoje
 
