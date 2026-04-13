@@ -182,6 +182,16 @@ const SprintDetail = () => {
               ))}
             </SelectContent>
           </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={handleResync}
+            disabled={isSyncing}
+          >
+            <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+            Sincronizar
+          </Button>
           <ExportButtons onExportPDF={handleExportPDF} onExportExcel={handleExportExcel} />
         </div>
       }
