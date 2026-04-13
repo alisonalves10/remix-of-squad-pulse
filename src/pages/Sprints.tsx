@@ -203,7 +203,22 @@ const SprintDetail = () => {
       title={sprint.name}
       description={`${sprint.squadName} • ${sprint.start_date} → ${sprint.end_date}`}
       actions={
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Select
+            value={selectedSquadId || ""}
+            onValueChange={handleSquadChange}
+          >
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Selecionar squad" />
+            </SelectTrigger>
+            <SelectContent>
+              {squads.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select
             value={sprint.id}
             onValueChange={(val) => navigate(`/sprints/${val}`)}
@@ -212,22 +227,25 @@ const SprintDetail = () => {
               <SelectValue placeholder="Selecionar sprint" />
             </SelectTrigger>
             <SelectContent>
-              {allSprints.map((s) => (
+              {squadSprints.map((s) => (
                 <SelectItem key={s.id} value={s.id}>
-                  {s.squadName} — {s.name}
+                  {s.name} {s.is_closed ? "(Fechada)" : ""}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={handleResync}
-            disabled={isSyncing}
-          >
-            <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
-            Sincronizar
+          {isSprintActive && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={handleResync}
+              disabled={isSyncing}
+            >
+              <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+              Sincronizar
+            </Button>
+          )}
           </Button>
           <ExportButtons onExportPDF={handleExportPDF} onExportExcel={handleExportExcel} />
         </div>
