@@ -118,6 +118,8 @@ const SprintDetail = () => {
 
   const {
     sprint,
+    squads,
+    sprintsBySquad,
     allSprints,
     workItems,
     totalItems,
