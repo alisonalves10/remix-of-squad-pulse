@@ -1,34 +1,33 @@
 
 
-# Fix: Default sprint selection to Backoffice + current sprint
+# Fix: Visão gerencial deve incluir itens relacionados de outras sprints
 
-## Problem
-When navigating to `/sprints` (no sprint ID in URL), the hook picks `sprints[0]` — the first sprint sorted by `start_date DESC` across ALL squads. This lands on "Sprint 10 Sellers e Produtos" instead of Backoffice's current sprint.
+## Problema
+A visão gerencial (hierarquia Epic → Feature → US) só mostra work items cujo `sprint_id` é igual à sprint selecionada. Porém, no Azure DevOps, uma Feature pode estar na Sprint 7 enquanto suas User Stories filhas estão na Sprint 8 (ou vice-versa). Exemplo concreto: Feature 51638 está na Sprint 7 do Backoffice, mas a US 52497 (filha dela) está na Sprint 8 — e não aparece na árvore.
 
-## Solution
+Há pelo menos 12 itens nessa situação só para a Sprint 7 do Backoffice.
+
+## Solução
 
 ### `src/hooks/useSprintDetailData.ts`
-When no `sprintId` is provided, change the default selection logic:
-1. Find the Backoffice squad (case-insensitive match)
-2. Filter sprints for that squad
-3. Find the current sprint (today between start_date and end_date, not closed), or fall back to the most recent one
 
-```typescript
-const sprint = sprintId
-  ? sprints.find((s) => s.id === sprintId) || sprints[0]
-  : (() => {
-      const backoffice = squadsData.find(s => s.name.toLowerCase() === "backoffice");
-      const squadId = backoffice?.id || squadsData[0]?.id;
-      const squadSprints = sprints.filter(s => s.squad_id === squadId);
-      const today = new Date().toISOString().split("T")[0];
-      const current = squadSprints.find(s => !s.is_closed && s.start_date <= today && s.end_date >= today);
-      return current || squadSprints[0] || sprints[0];
-    })();
-```
+Após buscar os work items da sprint, fazer uma segunda query para buscar itens relacionados (pais e filhos) que estejam em **outras sprints do mesmo squad**:
+
+1. Coletar todos os `parent_id` dos itens da sprint que não têm o parent presente na sprint
+2. Coletar todos os `id` dos itens management (Epic/Feature/US) para buscar filhos em outras sprints
+3. Fazer uma query adicional: `work_items WHERE (id IN [...parent_ids] OR parent_id IN [...management_ids]) AND sprint_id != current_sprint_id AND squad_id = current_squad_id`
+4. Mesclar esses itens "cross-sprint" no `managementItems` antes de construir a árvore
+5. Marcar esses itens com um flag `crossSprint: true` para exibir visualmente que pertencem a outra sprint
 
 ### `src/pages/Sprints.tsx`
-The `useEffect` on lines 38-49 already defaults `selectedSquadId` to Backoffice when no URL id — but the hook already loaded the wrong sprint. With the hook fix above, both will be consistent.
 
-## Files changed
-- `src/hooks/useSprintDetailData.ts` — default to Backoffice's current sprint
+Na renderização do `HierarchyNode`, exibir um badge discreto (ex: "Sprint 8") nos itens que vieram de outra sprint, para o gestor saber que o item está sendo tocado em outra iteração.
+
+## Arquivos alterados
+- `src/hooks/useSprintDetailData.ts` — query adicional para buscar itens cross-sprint e incluí-los na árvore
+- `src/pages/Sprints.tsx` — badge indicando sprint de origem nos itens cross-sprint
+
+## Impacto
+- A árvore gerencial passa a mostrar a hierarquia completa, independente de em qual sprint cada item foi alocado
+- O gestor consegue ver todas as US vinculadas a uma Feature, mesmo que estejam em sprints diferentes
 
