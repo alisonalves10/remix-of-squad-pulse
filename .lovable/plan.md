@@ -1,33 +1,37 @@
 
 
-# Fix: Visão gerencial deve incluir itens relacionados de outras sprints
+# Fix: Capturar work items que estiveram na sprint (spillover)
 
 ## Problema
-A visão gerencial (hierarquia Epic → Feature → US) só mostra work items cujo `sprint_id` é igual à sprint selecionada. Porém, no Azure DevOps, uma Feature pode estar na Sprint 7 enquanto suas User Stories filhas estão na Sprint 8 (ou vice-versa). Exemplo concreto: Feature 51638 está na Sprint 7 do Backoffice, mas a US 52497 (filha dela) está na Sprint 8 — e não aparece na árvore.
+Quando um item é movido de Sprint 7 para Sprint 8 no Azure DevOps, o WIQL da sincronização não o encontra mais na Sprint 7 — porque a query busca o estado **atual** dos items, e o `IterationPath` agora aponta para Sprint 8. Resultado: US 52497 sumiu da Sprint 7 apesar de ter estado lá.
 
-Há pelo menos 12 itens nessa situação só para a Sprint 7 do Backoffice.
+## Causa raiz
+1. A WIQL API por padrão retorna o estado atual. Items movidos não aparecem na sprint original.
+2. A tabela `work_items` usa `id` (Azure ID) como PK — um item só pode existir em uma sprint.
 
 ## Solução
 
-### `src/hooks/useSprintDetailData.ts`
+### 1. Migração: permitir mesmo item em múltiplas sprints
+- Trocar a PK de `id` para um UUID gerado (`pk`)
+- Manter `id` como coluna normal (Azure DevOps ID)
+- Adicionar constraint `UNIQUE(id, sprint_id)` para evitar duplicatas dentro da mesma sprint
 
-Após buscar os work items da sprint, fazer uma segunda query para buscar itens relacionados (pais e filhos) que estejam em **outras sprints do mesmo squad**:
+### 2. Edge function `azure-sync/index.ts`: usar `asOf` no WIQL para sprints fechadas
+- Para sprints com `isClosed = true`, adicionar o parâmetro `asOf: endDate` no body da WIQL request
+- Isso faz a API retornar os items como estavam na data de encerramento da sprint — incluindo items que depois foram movidos
+- Items que estavam na Sprint 7 no dia que ela fechou aparecem no resultado, mesmo que hoje estejam na Sprint 8
+- Fetch dos detalhes continua pegando o estado atual (horas, state) — que é o desejado
 
-1. Coletar todos os `parent_id` dos itens da sprint que não têm o parent presente na sprint
-2. Coletar todos os `id` dos itens management (Epic/Feature/US) para buscar filhos em outras sprints
-3. Fazer uma query adicional: `work_items WHERE (id IN [...parent_ids] OR parent_id IN [...management_ids]) AND sprint_id != current_sprint_id AND squad_id = current_squad_id`
-4. Mesclar esses itens "cross-sprint" no `managementItems` antes de construir a árvore
-5. Marcar esses itens com um flag `crossSprint: true` para exibir visualmente que pertencem a outra sprint
-
-### `src/pages/Sprints.tsx`
-
-Na renderização do `HierarchyNode`, exibir um badge discreto (ex: "Sprint 8") nos itens que vieram de outra sprint, para o gestor saber que o item está sendo tocado em outra iteração.
+### 3. Ajustar `syncToDatabase` para lidar com a nova PK
+- O `DELETE FROM work_items WHERE sprint_id = X` continua funcionando normalmente
+- O `INSERT` não precisa de mudança pois a PK agora é UUID auto-gerado
+- Marcar items que têm `IterationPath` diferente da sprint sendo sincronizada como `is_spillover = true`
 
 ## Arquivos alterados
-- `src/hooks/useSprintDetailData.ts` — query adicional para buscar itens cross-sprint e incluí-los na árvore
-- `src/pages/Sprints.tsx` — badge indicando sprint de origem nos itens cross-sprint
+- **Migração SQL** — nova PK UUID + unique constraint (id, sprint_id)
+- **`supabase/functions/azure-sync/index.ts`** — `asOf` no WIQL + detecção de spillover
+- **`src/hooks/useSprintDetailData.ts`** — nenhuma mudança necessária (já filtra por sprint_id)
 
-## Impacto
-- A árvore gerencial passa a mostrar a hierarquia completa, independente de em qual sprint cada item foi alocado
-- O gestor consegue ver todas as US vinculadas a uma Feature, mesmo que estejam em sprints diferentes
+## Após implementação
+Será necessário re-sincronizar ("Carregar Histórico 2026") para que os items movidos sejam capturados com `asOf`.
 
