@@ -43,8 +43,6 @@ export function useSprintDetailData(sprintId?: string) {
           .select("id, type, title, state, story_points, original_estimate, remaining_work, completed_work, is_spillover, assigned_to_user_id, created_at, completed_at, parent_id")
           .eq("sprint_id", sprint.id)
           .order("id"),
-          .eq("sprint_id", sprint.id)
-          .order("id"),
         supabase
           .from("metrics_snapshot")
           .select("*")
