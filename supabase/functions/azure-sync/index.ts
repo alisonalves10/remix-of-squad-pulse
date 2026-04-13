@@ -133,6 +133,16 @@ async function syncAreaPath(
     currentIteration = await fetchCurrentIteration(azureBase, azureHeaders);
     useProjectLevel = true;
   }
+
+  // If still no current iteration (or stale), try Classification Nodes API
+  if (!currentIteration || !isIterationCurrent(currentIteration)) {
+    console.log(`[${areaPath}] Trying Classification Nodes API fallback`);
+    const cnIteration = await findIterationByClassificationNodes(azureBase, azureHeaders);
+    if (cnIteration) {
+      currentIteration = cnIteration;
+      useProjectLevel = true;
+    }
+  }
   console.log(`[${areaPath}] Current iteration:`, JSON.stringify(currentIteration));
 
   // 2. WIQL query — use explicit iteration path when available (avoids @CurrentIteration issues with project-level API)
