@@ -1,51 +1,34 @@
 
 
-# Visão hierárquica de Work Items + Painel de Épicos/Features/US
+# Fix: Default sprint selection to Backoffice + current sprint
 
-## Resumo
-Adicionar campo `parent_id` nos work items para registrar a hierarquia do Azure DevOps (Epic → Feature → US → Task/Bug). Criar um painel de visão gerencial mostrando Épicos, Features e User Stories em árvore antes da tabela de work items. Na tabela, Tasks e Bugs passam a exibir a US pai relacionada.
+## Problem
+When navigating to `/sprints` (no sprint ID in URL), the hook picks `sprints[0]` — the first sprint sorted by `start_date DESC` across ALL squads. This lands on "Sprint 10 Sellers e Produtos" instead of Backoffice's current sprint.
 
-## Alterações
+## Solution
 
-### 1. Migração: adicionar `parent_id` à tabela `work_items`
-```sql
-ALTER TABLE work_items ADD COLUMN parent_id integer;
+### `src/hooks/useSprintDetailData.ts`
+When no `sprintId` is provided, change the default selection logic:
+1. Find the Backoffice squad (case-insensitive match)
+2. Filter sprints for that squad
+3. Find the current sprint (today between start_date and end_date, not closed), or fall back to the most recent one
+
+```typescript
+const sprint = sprintId
+  ? sprints.find((s) => s.id === sprintId) || sprints[0]
+  : (() => {
+      const backoffice = squadsData.find(s => s.name.toLowerCase() === "backoffice");
+      const squadId = backoffice?.id || squadsData[0]?.id;
+      const squadSprints = sprints.filter(s => s.squad_id === squadId);
+      const today = new Date().toISOString().split("T")[0];
+      const current = squadSprints.find(s => !s.is_closed && s.start_date <= today && s.end_date >= today);
+      return current || squadSprints[0] || sprints[0];
+    })();
 ```
 
-### 2. Edge function: capturar `parent_id` das relations (`azure-sync/index.ts`)
-A API já retorna `$expand=relations`. Extrair o parent de cada work item a partir dos links de hierarquia (`System.LinkTypes.Hierarchy-Reverse`), que aponta para o pai. Salvar o `parent_id` no insert do work item.
+### `src/pages/Sprints.tsx`
+The `useEffect` on lines 38-49 already defaults `selectedSquadId` to Backoffice when no URL id — but the hook already loaded the wrong sprint. With the hook fix above, both will be consistent.
 
-```text
-relations.filter(r => r.rel === "System.LinkTypes.Hierarchy-Reverse")
-  → extrair ID da URL → parent_id
-```
-
-### 3. Hook: expor dados hierárquicos (`useSprintDetailData.ts`)
-- Construir um mapa `id → work item` para lookup de parent
-- Separar itens em dois grupos:
-  - **Visão Gerencial**: Epics, Features, User Stories — organizados em árvore (Epic → Feature → US)
-  - **Work Items**: Tasks, Bugs, Issues, Speed — cada um com referência ao parent (US ou Issue)
-- Retornar ambos os grupos no resultado
-
-### 4. UI: Painel de Visão Gerencial (`Sprints.tsx`)
-Novo card antes da tabela de work items exibindo a hierarquia:
-- **Épicos** como cabeçalhos colapsáveis
-- **Features** aninhadas sob o Épico
-- **User Stories** aninhadas sob a Feature
-- Cada item com badge de tipo, estado e título
-- Itens órfãos (sem parent na sprint) aparecem no nível raiz
-
-### 5. UI: Tabela de Work Items atualizada (`Sprints.tsx`)
-- Filtrar para mostrar apenas Task, Bug, Issue, Speed
-- Nova coluna "US/Parent" que mostra o título da User Story (ou Issue) pai
-- Manter filtros e busca existentes
-
-## Arquivos alterados
-- **Migração SQL** — `ALTER TABLE work_items ADD COLUMN parent_id integer`
-- **`supabase/functions/azure-sync/index.ts`** — extrair parent_id das relations e salvar
-- **`src/hooks/useSprintDetailData.ts`** — construir hierarquia e separar grupos
-- **`src/pages/Sprints.tsx`** — novo painel de visão gerencial + coluna parent na tabela
-
-## Observação
-Após aprovar e implementar, será necessário re-sincronizar os dados (botão "Carregar Histórico 2026") para que o `parent_id` seja preenchido nos work items existentes.
+## Files changed
+- `src/hooks/useSprintDetailData.ts` — default to Backoffice's current sprint
 
