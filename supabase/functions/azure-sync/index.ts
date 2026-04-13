@@ -387,7 +387,10 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
   const iterPath = currentIterPath || "Unknown";
   const sprintName = currentIteration?.name || iterPath.split("\\").pop() || iterPath;
 
-  let { data: sprint } = await supabase.from("sprints").select("id").eq("azure_iteration_path", iterPath).eq("squad_id", squadId).single();
+  const todayStr = new Date().toISOString().split("T")[0];
+  const isClosed = endDate < todayStr;
+
+  let { data: sprint } = await supabase.from("sprints").select("id, end_date").eq("azure_iteration_path", iterPath).eq("squad_id", squadId).single();
 
   if (!sprint) {
     const { data: newSprint } = await supabase.from("sprints").insert({
@@ -396,13 +399,11 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
       azure_iteration_path: iterPath,
       start_date: startDate,
       end_date: endDate,
-      is_closed: false,
+      is_closed: isClosed,
     }).select().single();
     sprint = newSprint;
   } else {
-    if (currentIteration?.startDate) {
-      await supabase.from("sprints").update({ start_date: startDate, end_date: endDate, name: sprintName }).eq("id", sprint.id);
-    }
+    await supabase.from("sprints").update({ start_date: startDate, end_date: endDate, name: sprintName, is_closed: isClosed }).eq("id", sprint.id);
   }
 
   if (!sprint) {
