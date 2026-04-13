@@ -434,6 +434,44 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
 
   await supabase.from("work_items").delete().eq("sprint_id", sprint.id);
 
+  // --- Resolve assigned users ---
+  const userMap = new Map<string, string>(); // uniqueName (lowercase) → user.id
+  const uniqueAssignees = new Map<string, { displayName: string; uniqueName: string }>();
+  for (const wi of workItems) {
+    const assignedTo = wi.fields["System.AssignedTo"];
+    if (assignedTo?.uniqueName) {
+      const key = assignedTo.uniqueName.toLowerCase();
+      if (!uniqueAssignees.has(key)) {
+        uniqueAssignees.set(key, { displayName: assignedTo.displayName || assignedTo.uniqueName, uniqueName: assignedTo.uniqueName });
+      }
+    }
+  }
+
+  for (const [key, person] of uniqueAssignees) {
+    try {
+      // Try to find existing user by azure_devops_unique_name (case-insensitive)
+      const { data: existing } = await supabase
+        .from("users")
+        .select("id")
+        .ilike("azure_devops_unique_name", person.uniqueName)
+        .maybeSingle();
+
+      if (existing) {
+        userMap.set(key, existing.id);
+      } else {
+        const { data: newUser } = await supabase
+          .from("users")
+          .insert({ name: person.displayName, email: person.uniqueName, azure_devops_unique_name: person.uniqueName })
+          .select("id")
+          .single();
+        if (newUser) userMap.set(key, newUser.id);
+      }
+    } catch (err) {
+      console.warn(`Failed to upsert user ${person.uniqueName}:`, err);
+    }
+  }
+  console.log(`[${areaPath}] Resolved ${userMap.size} unique assignees`);
+
   let totalSynced = 0;
   for (const wi of workItems) {
     const type = wi.fields["System.WorkItemType"] || "Task";
