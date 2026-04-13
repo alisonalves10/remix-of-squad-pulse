@@ -1,33 +1,52 @@
 
+Objetivo: corrigir o deslocamento de 1 dia nos gráficos de burndown e burnup de todas as squads, para que a linha do tempo mostre exatamente 30/03 a 10/04, e não 29/03 a 09/04.
 
-# Fix: Chart timeline must end at sprint end date
+Diagnóstico confirmado:
+- Os dados no banco estão corretos para a sprint da E-commerce: `2026-03-30` até `2026-04-10`.
+- O erro está no frontend, na montagem das datas do gráfico em `src/hooks/useSprintDetailData.ts`.
+- Hoje o código usa `new Date(sprint.start_date)`, `new Date(sprint.end_date)` e depois combina isso com:
+  - `toLocaleDateString("pt-BR", ...)`
+  - `toISOString().split("T")[0]`
+- Esse padrão causa deslocamento por fuso/parse de data sem timezone explícito. Resultado: o eixo e o lookup diário ficam 1 dia antes em alguns ambientes.
 
-## Problem
-1. There is a stale record in `sprint_progress_daily` dated `2026-04-12` for this sprint (which ends `2026-04-10`). This was created before the date-clamping fix in `azure-sync`.
-2. The frontend code (`useSprintDetailData.ts`) extends the timeline to `max(end_date, lastActualDate)`, so it renders days beyond the sprint.
+Implementação proposta:
+1. Criar um parser de data sem timezone
+- Adicionar uma função utilitária local para converter `YYYY-MM-DD` em `Date` de forma segura, usando construção explícita da data, sem `new Date(string)`.
+- A função deve gerar a data no calendário correto, sem sofrer ajuste de timezone.
 
-## Solution
+2. Refatorar a geração da timeline
+- Substituir:
+  - `const start = new Date(sprint.start_date)`
+  - `const end = new Date(sprint.end_date)`
+- Passar a usar o parser seguro para `start` e `end`.
 
-### 1. Delete stale data (SQL migration)
-Remove the `sprint_progress_daily` record where `date > sprint.end_date`:
-```sql
-DELETE FROM sprint_progress_daily
-WHERE sprint_id = '59d860f0-412a-4f42-a9a5-60a0741ff927'
-  AND date > '2026-04-10';
-```
-Also run a general cleanup for all sprints to prevent this elsewhere.
+3. Corrigir a chave usada para buscar no `dailyMap`
+- Hoje a chave é montada com `d.toISOString().split("T")[0]`, que também pode mudar o dia.
+- Trocar por um formatador local estável para `YYYY-MM-DD`, baseado no mesmo parser/formatter seguro.
 
-### 2. Cap timeline to sprint end date (`src/hooks/useSprintDetailData.ts`)
-Remove the logic that extends the timeline beyond `end_date`. Change:
-- `timelineEnd = lastActualDate > end ? lastActualDate : end` → `timelineEnd = end`
-- Remove `lastActualDate` tracking
-- Filter out any `progressDaily` entries where `date > sprint.end_date` before building the chart
+4. Manter o range oficial da sprint
+- Preservar a lógica já corrigida que limita o gráfico ao `end_date`.
+- Garantir que o loop continue gerando exatamente os dias da sprint, inclusive o último dia.
 
-This ensures charts always end on the last day of the sprint, regardless of any stale data in the database.
+5. Validar em todas as squads
+- Conferir que os gráficos passam a renderizar:
+  - início em `30/03`
+  - fim em `10/04`
+- Validar especialmente squads com:
+  - histórico completo
+  - apenas 1 snapshot
+  - sprint encerrada
 
-### 3. Already fixed in azure-sync
-The sync function already clamps snapshot dates to `min(today, end_date)`, so no new stale records will be created.
+Arquivos envolvidos:
+- `src/hooks/useSprintDetailData.ts`
+- opcionalmente um utilitário compartilhado em `src/lib/` se eu preferir reaproveitar o parser
 
-### Expected result
-Burndown and Burnup charts for E-commerce will end at 10/04, showing 12 data points (03/30 through 04/10).
+Resultado esperado:
+- Todos os gráficos de burndown e burnup passam a respeitar exatamente as datas oficiais da sprint.
+- O eixo X e os pontos reais deixam de aparecer 1 dia antes.
+- A correção vale para todas as squads, não só E-commerce.
 
+Detalhe técnico:
+- Não precisa alterar banco, sincronização nem backend.
+- O problema é de parsing/serialização de datas no cliente.
+- A causa mais provável é a combinação de `new Date("YYYY-MM-DD")` com `toISOString()` e timezone do navegador.
