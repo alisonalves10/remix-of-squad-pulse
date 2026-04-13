@@ -34,7 +34,14 @@ export function useSprintDetailData(sprintId?: string) {
 
       const sprint = sprintId
         ? sprints.find((s) => s.id === sprintId) || sprints[0]
-        : sprints[0];
+        : (() => {
+            const backoffice = squadsData.find(s => s.name.toLowerCase() === "backoffice");
+            const squadId = backoffice?.id || squadsData[0]?.id;
+            const squadSprints = sprints.filter(s => s.squad_id === squadId);
+            const todayStr = formatDateKey(new Date());
+            const current = squadSprints.find(s => !s.is_closed && s.start_date <= todayStr && s.end_date >= todayStr);
+            return current || squadSprints[0] || sprints[0];
+          })();
 
       // Fetch work items and metrics for the selected sprint
       const [workItemsRes, metricsRes, progressRes, usersRes] = await Promise.all([
