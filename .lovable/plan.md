@@ -1,61 +1,56 @@
 
 
-# Fix: Times ausentes e burndown de Dados e Analytics
+# Navegação de Sprints com histórico por Squad
 
-## Problemas identificados
+## Situação atual
+- A página `/sprints` recebe um `id` opcional via URL e mostra um único seletor que mistura todas as squads e sprints
+- Ao acessar sem ID, mostra a primeira sprint da lista (ordenada por data desc)
+- O botão "Sincronizar" sempre aparece habilitado
+- Só existem 8 sprints no banco (1 por squad), mas conforme novas sprints forem criadas pela sincronização, o histórico se acumulará
 
-### 1. Times ausentes (Infraestrutura, Arquitetura e Inovação, B2B e Instalação)
-A edge function `azure-sync` usa o Area Path como nome de **Team** na URL da API Azure DevOps:
-```
-https://dev.azure.com/org/project/B2B e Instalação/_apis/work/teamsettings/iterations
-```
-O Azure retorna erro 404: *"The team with id 'B2B e Instalação' does not exist"*. Esses Area Paths não correspondem a um Team no Azure DevOps, então tanto a busca de iteração quanto o WIQL falham silenciosamente.
+## Mudanças planejadas
 
-### 2. Burndown de Dados e Analytics
-Os dados existem no banco (11 registros em `sprint_progress_daily`). É provável que o gráfico esteja renderizando, mas o usuário pode não ter navegado até essa sprint. Vou verificar se há algum problema de renderização adicional.
+### 1. Reestruturar navegação com dois seletores (Sprints.tsx)
+- **Seletor de Squad**: lista todas as squads. Default = "Backoffice"
+- **Seletor de Sprint**: filtra sprints da squad selecionada, ordenadas por data desc. Default = sprint mais recente (vigente)
+- Ao trocar de squad, selecionar automaticamente a sprint vigente (não fechada) ou a mais recente
+- Ao trocar de sprint, atualizar a visualização sem mudar de squad
 
-## Solução
+### 2. Botão Sincronizar condicional
+- Mostrar o botão "Sincronizar" apenas quando a sprint selecionada **não está fechada** (`is_closed !== true` e `end_date >= hoje`)
+- Para sprints passadas/fechadas, ocultar ou desabilitar o botão
 
-### Edge function `azure-sync/index.ts` — fallback para API de projeto
+### 3. Atualizar hook useSprintDetailData
+- Aceitar `sprintId` como parâmetro (já aceita) — manter como está
+- Retornar também a lista de squads e sprints agrupadas para os seletores
 
-Modificar `syncAreaPath` para:
+### 4. Gerenciar estado via URL
+- Manter a rota `/sprints/:id` para deep linking
+- Ao acessar `/sprints` sem ID, resolver para sprint vigente de Backoffice
 
-1. **Iteração**: Se a busca por team falhar (404), buscar iterações no nível do projeto (`/project/_apis/work/teamsettings/iterations`) usando o time padrão, ou extrair o iteration path via WIQL.
-
-2. **WIQL**: Se o WIQL com contexto de team falhar, repetir usando a URL base do projeto (sem o team no path):
-   ```
-   https://dev.azure.com/org/project/_apis/wit/wiql
-   ```
-   O filtro `[System.AreaPath] UNDER` já garante que só work items do Area Path correto são retornados.
-
-3. **Iteração via WIQL alternativo**: Quando não há team, buscar a iteração corrente consultando um work item existente no Area Path e extraindo seu `System.IterationPath`, ou usar uma query WIQL sem `@CurrentIteration` e sim com filtro temporal baseado nas datas do sprint.
-
-### Mudança concreta no `syncAreaPath`:
-
-```text
-syncAreaPath():
-  1. Tentar buscar iteração com teamAzureBase (como hoje)
-  2. Se falhar (404), tentar com azureBase (nível projeto) usando o time padrão do projeto
-  3. Se ambos falharem, usar WIQL alternativo:
-     - Query sem @CurrentIteration, filtrando por AreaPath e 
-       IterationPath UNDER o caminho raiz das iterações
-  4. WIQL: se falhar com teamAzureBase, repetir com azureBase
-```
-
-### Arquivos alterados
-- `supabase/functions/azure-sync/index.ts` — adicionar fallback na busca de iteração e WIQL
-
-Nenhuma migration necessária.
+## Arquivos alterados
+- `src/pages/Sprints.tsx` — substituir o seletor único por dois seletores (squad + sprint), lógica de default para Backoffice, condicional no botão sincronizar
+- `src/hooks/useSprintDetailData.ts` — ajustar para retornar squads e sprints agrupadas por squad nos dados de retorno
 
 ## Detalhes técnicos
 
-A mudança principal está em duas funções:
+No hook, adicionar query de squads e agrupar `allSprints` por `squad_id`:
+```typescript
+// Retornar squads e sprints agrupadas
+squads: squadsData,
+sprintsBySquad: sprints grouped by squad_id
+```
 
-**`fetchCurrentIteration`**: Aceitar um fallback URL e tentar ambos (team → project level).
+Na página, gerenciar dois estados: `selectedSquadId` e o sprint ID via URL:
+```typescript
+const [selectedSquadId, setSelectedSquadId] = useState<string | null>(null);
+// Ao carregar dados, se não há squad selecionada, usar Backoffice
+// Ao trocar squad, navegar para sprint vigente dessa squad
+```
 
-**`syncAreaPath`**: 
-- Construir `fallbackBase = azureBase` (sem team no path)
-- Se `fetchCurrentIteration(teamAzureBase)` retornar null, tentar `fetchCurrentIteration(fallbackBase)` 
-- Se WIQL com `teamAzureBase` falhar, repetir com `fallbackBase`
-- Substituir `@CurrentIteration` por iteração explícita quando obtida via fallback
+Botão sincronizar:
+```typescript
+const isSprintActive = !sprint.is_closed && sprint.end_date >= todayStr;
+// Renderizar botão apenas se isSprintActive
+```
 
