@@ -1,31 +1,51 @@
 
 
-# Fix: Sprint 7 faltando + gráficos burndown/burnup não carregam
+# Visão hierárquica de Work Items + Painel de Épicos/Features/US
 
-## Problema 1: Sprint 7 ausente para 4 times
-A Sprint 7 está faltando para **Backoffice, Sellers e Produtos, Arquitetura e Inovação, E-Commerce**. Isso ocorreu porque a sincronização histórica desses times falhou com "Failed to fetch" (timeout de 5 min excedido para processar 23 iterações por time).
+## Resumo
+Adicionar campo `parent_id` nos work items para registrar a hierarquia do Azure DevOps (Epic → Feature → US → Task/Bug). Criar um painel de visão gerencial mostrando Épicos, Features e User Stories em árvore antes da tabela de work items. Na tabela, Tasks e Bugs passam a exibir a US pai relacionada.
 
-**Causa raiz**: a edge function tenta sincronizar todas as 23 iterações de 2026 numa única chamada, e para times com muitos work items, isso excede o timeout.
+## Alterações
 
-**Solução**: No frontend (`src/pages/Settings.tsx`), ao usar `syncAllIterations`, limitar o envio a **lotes menores** — enviar as iterações em grupos (ex: 5 por chamada) ou enviar uma iteração por chamada. Alternativa mais simples: apenas re-executar a sincronização histórica para os times que falharam, pois os dados já parcialmente sincronizados são preservados (upsert).
+### 1. Migração: adicionar `parent_id` à tabela `work_items`
+```sql
+ALTER TABLE work_items ADD COLUMN parent_id integer;
+```
 
-Na prática, a correção mais efetiva é **dividir as iterações no lado do edge function**: aceitar um parâmetro `maxIterations` ou processar em chunks internamente, respondendo antes do timeout.
+### 2. Edge function: capturar `parent_id` das relations (`azure-sync/index.ts`)
+A API já retorna `$expand=relations`. Extrair o parent de cada work item a partir dos links de hierarquia (`System.LinkTypes.Hierarchy-Reverse`), que aponta para o pai. Salvar o `parent_id` no insert do work item.
 
-## Problema 2: Gráficos burndown/burnup não renderizam
-Os componentes `BurndownChart` e `BurnupChart` declaram interfaces com tipos `number`, mas o hook `useSprintDetailData` retorna `number | null` nos campos `remaining`, `completed` e `scope`. O Recharts não renderiza linhas quando recebe `null` em campos tipados como `number`.
+```text
+relations.filter(r => r.rel === "System.LinkTypes.Hierarchy-Reverse")
+  → extrair ID da URL → parent_id
+```
 
-**Solução**: Atualizar as interfaces dos dois componentes para aceitar `number | null`:
+### 3. Hook: expor dados hierárquicos (`useSprintDetailData.ts`)
+- Construir um mapa `id → work item` para lookup de parent
+- Separar itens em dois grupos:
+  - **Visão Gerencial**: Epics, Features, User Stories — organizados em árvore (Epic → Feature → US)
+  - **Work Items**: Tasks, Bugs, Issues, Speed — cada um com referência ao parent (US ou Issue)
+- Retornar ambos os grupos no resultado
 
-- **`BurndownChart.tsx`**: Mudar `remaining: number` para `remaining: number | null`
-- **`BurnupChart.tsx`**: Mudar `completed: number` e `scope: number` para `number | null`
+### 4. UI: Painel de Visão Gerencial (`Sprints.tsx`)
+Novo card antes da tabela de work items exibindo a hierarquia:
+- **Épicos** como cabeçalhos colapsáveis
+- **Features** aninhadas sob o Épico
+- **User Stories** aninhadas sob a Feature
+- Cada item com badge de tipo, estado e título
+- Itens órfãos (sem parent na sprint) aparecem no nível raiz
+
+### 5. UI: Tabela de Work Items atualizada (`Sprints.tsx`)
+- Filtrar para mostrar apenas Task, Bug, Issue, Speed
+- Nova coluna "US/Parent" que mostra o título da User Story (ou Issue) pai
+- Manter filtros e busca existentes
 
 ## Arquivos alterados
-1. `src/components/dashboard/BurndownChart.tsx` — interface aceitar `null`
-2. `src/components/dashboard/BurnupChart.tsx` — interface aceitar `null`
-3. `supabase/functions/azure-sync/index.ts` — dividir iterações em chunks de 5 para evitar timeout
-4. `src/pages/Settings.tsx` — aumentar timeout do fetch para histórico ou enviar iterações individualmente
+- **Migração SQL** — `ALTER TABLE work_items ADD COLUMN parent_id integer`
+- **`supabase/functions/azure-sync/index.ts`** — extrair parent_id das relations e salvar
+- **`src/hooks/useSprintDetailData.ts`** — construir hierarquia e separar grupos
+- **`src/pages/Sprints.tsx`** — novo painel de visão gerencial + coluna parent na tabela
 
-## Impacto
-- Gráficos passam a renderizar corretamente para todas as sprints com dados
-- Sincronização histórica não excede mais o timeout de 5 minutos
+## Observação
+Após aprovar e implementar, será necessário re-sincronizar os dados (botão "Carregar Histórico 2026") para que o `parent_id` seja preenchido nos work items existentes.
 
