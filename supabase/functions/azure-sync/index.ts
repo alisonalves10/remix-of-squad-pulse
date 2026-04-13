@@ -77,12 +77,16 @@ Deno.serve(async (req) => {
     }
 
     let areaPaths: string[] = config.area_paths || ["Backoffice"];
+    let syncAllIterations = false;
     try {
       const body = await req.json();
       if (body.areaPaths && Array.isArray(body.areaPaths)) {
         areaPaths = body.areaPaths;
       } else if (body.areaPath) {
         areaPaths = [body.areaPath];
+      }
+      if (body.syncAllIterations === true) {
+        syncAllIterations = true;
       }
     } catch { /* use config defaults for cron calls */ }
 
