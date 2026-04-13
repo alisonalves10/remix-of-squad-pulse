@@ -139,28 +139,33 @@ async function syncAreaPath(
   organization: string,
   project: string,
   areaPath: string,
-  azureHeaders: Record<string, string>
+  azureHeaders: Record<string, string>,
+  specificIteration?: IterationInfo
 ): Promise<SyncResult> {
   const teamAzureBase = `https://dev.azure.com/${organization}/${project}/${encodeURIComponent(areaPath)}`;
   const azureBase = `https://dev.azure.com/${organization}/${project}`;
 
-  // 1. Fetch current iteration — try team-level first, then project-level fallback
-  let currentIteration = await fetchCurrentIteration(teamAzureBase, azureHeaders);
-  let useProjectLevel = false;
+  let currentIteration: IterationInfo | null = specificIteration || null;
+  let useProjectLevel = !!specificIteration;
 
-  if (!currentIteration) {
-    console.log(`[${areaPath}] Team-level iteration failed, trying project-level fallback`);
-    currentIteration = await fetchCurrentIteration(azureBase, azureHeaders);
-    useProjectLevel = true;
-  }
+  if (!specificIteration) {
+    // 1. Fetch current iteration — try team-level first, then project-level fallback
+    currentIteration = await fetchCurrentIteration(teamAzureBase, azureHeaders);
 
-  // If still no current iteration (or stale), try Classification Nodes API
-  if (!currentIteration || !isIterationCurrent(currentIteration)) {
-    console.log(`[${areaPath}] Trying Classification Nodes API fallback`);
-    const cnIteration = await findIterationByClassificationNodes(azureBase, azureHeaders);
-    if (cnIteration) {
-      currentIteration = cnIteration;
+    if (!currentIteration) {
+      console.log(`[${areaPath}] Team-level iteration failed, trying project-level fallback`);
+      currentIteration = await fetchCurrentIteration(azureBase, azureHeaders);
       useProjectLevel = true;
+    }
+
+    // If still no current iteration (or stale), try Classification Nodes API
+    if (!currentIteration || !isIterationCurrent(currentIteration)) {
+      console.log(`[${areaPath}] Trying Classification Nodes API fallback`);
+      const cnIteration = await findIterationByClassificationNodes(azureBase, azureHeaders);
+      if (cnIteration) {
+        currentIteration = cnIteration;
+        useProjectLevel = true;
+      }
     }
   }
   console.log(`[${areaPath}] Current iteration:`, JSON.stringify(currentIteration));
