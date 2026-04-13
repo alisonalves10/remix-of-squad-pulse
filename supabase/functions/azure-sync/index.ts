@@ -455,6 +455,11 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
       }
     }
 
+    // Detect spillover: item's current IterationPath differs from the sprint being synced
+    const itemIterPath = wi.fields["System.IterationPath"] || "";
+    const sprintIterPath = iterPath;
+    const isSpillover = itemIterPath !== sprintIterPath;
+
     await supabase.from("work_items").insert({
       id: wi.id,
       sprint_id: sprint.id,
@@ -465,7 +470,7 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
       remaining_work: remainingWork,
       completed_work: completedWork,
       completed_at: completedAt,
-      is_spillover: false,
+      is_spillover: isSpillover,
       parent_id: parentId,
     });
     totalSynced++;
