@@ -1,6 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
+/** Parse YYYY-MM-DD as local date (no timezone shift) */
+function parseLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/** Format Date to YYYY-MM-DD without timezone issues */
+function formatDateKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 export function useSprintDetailData(sprintId?: string) {
   return useQuery({
     queryKey: ["sprint-detail", sprintId ?? "default"],
@@ -68,8 +82,8 @@ export function useSprintDetailData(sprintId?: string) {
       let burndownData: Array<{ date: string; remaining: number | null; ideal: number }> = [];
       let burnupData: Array<{ date: string; completed: number | null; scope: number | null }> = [];
 
-      const start = new Date(sprint.start_date);
-      const end = new Date(sprint.end_date);
+      const start = parseLocalDate(sprint.start_date);
+      const end = parseLocalDate(sprint.end_date);
       const today = new Date();
       today.setHours(23, 59, 59, 999);
 
@@ -96,7 +110,7 @@ export function useSprintDetailData(sprintId?: string) {
         const d = new Date(start);
         d.setDate(d.getDate() + i);
         const label = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-        const dateKey = d.toISOString().split("T")[0];
+        const dateKey = formatDateKey(d);
 
         // Ideal line only spans the official sprint range
         const ideal = i <= sprintDays
