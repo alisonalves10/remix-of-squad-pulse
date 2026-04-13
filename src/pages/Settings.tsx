@@ -218,15 +218,57 @@ const Settings = () => {
 
         <Card className="shadow-card">
           <CardHeader>
+            <CardTitle className="text-lg">Descobrir Area Paths</CardTitle>
+            <CardDescription>Busque os Area Paths disponíveis diretamente do Azure DevOps</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Button variant="outline" onClick={handleDiscoverAreaPaths} disabled={isLoadingAreas}>
+              <FolderTree className={`mr-2 h-4 w-4 ${isLoadingAreas ? "animate-spin" : ""}`} />
+              {isLoadingAreas ? "Buscando..." : "Buscar Area Paths do Azure DevOps"}
+            </Button>
+
+            {availableAreaPaths.length > 0 && (
+              <div className="space-y-2">
+                <Label>Area Paths disponíveis ({availableAreaPaths.length})</Label>
+                <div className="border rounded-md max-h-64 overflow-y-auto divide-y">
+                  {availableAreaPaths.map((path) => {
+                    const isSelected = areaPaths.includes(path);
+                    return (
+                      <label
+                        key={path}
+                        className="flex items-center gap-3 px-3 py-2 hover:bg-muted/50 cursor-pointer"
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => handleToggleAreaPath(path)}
+                        />
+                        <span className="text-sm">{path}</span>
+                        {isSelected && (
+                          <Badge variant="default" className="ml-auto text-xs">Selecionado</Badge>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Marque os Area Paths que deseja sincronizar. Lembre-se de salvar as configurações após selecionar.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-card">
+          <CardHeader>
             <CardTitle className="text-lg">Sincronização</CardTitle>
             <CardDescription>Importe dados do Azure DevOps para o portal</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Area Paths (Times)</Label>
+              <Label>Area Paths selecionados ({areaPaths.length})</Label>
               <div className="flex gap-2">
                 <Input
-                  placeholder="Nome do Area Path (ex: Backoffice)"
+                  placeholder="Adicionar manualmente (ex: Backoffice)"
                   value={newAreaPath}
                   onChange={(e) => setNewAreaPath(e.target.value)}
                   onKeyDown={handleKeyDown}
@@ -236,7 +278,6 @@ const Settings = () => {
                   Adicionar
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">Adicione os Area Paths dos times que deseja sincronizar</p>
 
               {areaPaths.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2">
