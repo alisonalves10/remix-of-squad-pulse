@@ -192,14 +192,56 @@ async function fetchCurrentIteration(baseUrl: string, headers: Record<string, st
     if (iterations.length === 0) return null;
 
     const iter = iterations[0];
-    return {
+    const result: IterationInfo = {
       name: iter.name,
       path: iter.path,
       startDate: iter.attributes?.startDate || null,
       endDate: iter.attributes?.finishDate || null,
     };
+
+    // Check if the returned iteration actually covers today
+    const today = new Date().toISOString().split("T")[0];
+    const iterStart = result.startDate?.split("T")[0] || "";
+    const iterEnd = result.endDate?.split("T")[0] || "";
+
+    if (iterStart && iterEnd && (today < iterStart || today > iterEnd)) {
+      console.warn(`[fetchCurrentIteration] Returned iteration "${result.name}" (${iterStart} to ${iterEnd}) does not cover today (${today}). Searching all iterations by date...`);
+      const found = await findIterationByDate(baseUrl, headers, today);
+      if (found) return found;
+    }
+
+    return result;
   } catch (err) {
     console.error("Error fetching iteration:", err);
+    return null;
+  }
+}
+
+async function findIterationByDate(baseUrl: string, headers: Record<string, string>, today: string): Promise<IterationInfo | null> {
+  try {
+    const url = `${baseUrl}/_apis/work/teamsettings/iterations?api-version=7.0`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const iterations = data.value || [];
+
+    for (const iter of iterations) {
+      const start = iter.attributes?.startDate?.split("T")[0];
+      const end = iter.attributes?.finishDate?.split("T")[0];
+      if (start && end && start <= today && today <= end) {
+        console.log(`[findIterationByDate] Found matching iteration: ${iter.name} (${start} to ${end})`);
+        return {
+          name: iter.name,
+          path: iter.path,
+          startDate: iter.attributes.startDate,
+          endDate: iter.attributes.finishDate,
+        };
+      }
+    }
+    console.warn(`[findIterationByDate] No iteration covers today (${today}) among ${iterations.length} iterations`);
+    return null;
+  } catch (err) {
+    console.error("[findIterationByDate] Error:", err);
     return null;
   }
 }

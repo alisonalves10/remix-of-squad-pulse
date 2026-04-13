@@ -91,7 +91,20 @@ const Settings = () => {
   };
 
   const handleRemoveAreaPath = (path: string) => {
-    setAreaPaths(areaPaths.filter((p) => p !== path));
+    const updated = areaPaths.filter((p) => p !== path);
+    setAreaPaths(updated);
+    // Auto-save after removing
+    if (configId) {
+      const payload = {
+        area_paths: updated.length > 0 ? updated : ["Backoffice"],
+        updated_at: new Date().toISOString(),
+      };
+      supabase.from("azure_config").update(payload).eq("id", configId).then(({ error }) => {
+        if (error) {
+          toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+        }
+      });
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -124,10 +137,21 @@ const Settings = () => {
   };
 
   const handleToggleAreaPath = (path: string) => {
-    if (areaPaths.includes(path)) {
-      setAreaPaths(areaPaths.filter((p) => p !== path));
-    } else {
-      setAreaPaths([...areaPaths, path]);
+    const updated = areaPaths.includes(path)
+      ? areaPaths.filter((p) => p !== path)
+      : [...areaPaths, path];
+    setAreaPaths(updated);
+    // Auto-save after toggling
+    if (configId) {
+      const payload = {
+        area_paths: updated.length > 0 ? updated : ["Backoffice"],
+        updated_at: new Date().toISOString(),
+      };
+      supabase.from("azure_config").update(payload).eq("id", configId).then(({ error }) => {
+        if (error) {
+          toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+        }
+      });
     }
   };
 
