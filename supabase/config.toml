@@ -1,1 +1,5 @@
 project_id = "iixgufqwfthjtfsautmv"
+
+[functions.azure-sync]
+verify_jwt = false
+wall_clock_limit = 300
