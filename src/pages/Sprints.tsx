@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { KPICard } from "@/components/dashboard/KPICard";
@@ -11,20 +12,46 @@ import { BurndownChart } from "@/components/dashboard/BurndownChart";
 import { BurnupChart } from "@/components/dashboard/BurnupChart";
 import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText, CheckCircle, AlertTriangle, RotateCcw, Clock, Bug, Calendar, Search } from "lucide-react";
+import { FileText, CheckCircle, AlertTriangle, RotateCcw, Clock, Bug, Calendar, Search, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { useSprintDetailData } from "@/hooks/useSprintDetailData";
 import { useExport } from "@/hooks/useExport";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 const SprintDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { exportToPDF, exportToExcel } = useExport();
+  const queryClient = useQueryClient();
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [stateFilter, setStateFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const { data, isLoading } = useSprintDetailData(id);
+
+  const handleResync = async () => {
+    if (!data) return;
+    setIsSyncing(true);
+    try {
+      const { error } = await supabase.functions.invoke("azure-sync", {
+        body: { areaPaths: [data.sprint.squadName] },
+      });
+      if (error) throw error;
+      toast.success("Sincronização concluída", {
+        description: "Os dados de burndown foram atualizados.",
+      });
+      await queryClient.invalidateQueries({ queryKey: ["sprintDetail"] });
+    } catch (err: any) {
+      toast.error("Erro na sincronização", {
+        description: err.message || "Tente novamente mais tarde.",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -155,6 +182,16 @@ const SprintDetail = () => {
               ))}
             </SelectContent>
           </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={handleResync}
+            disabled={isSyncing}
+          >
+            <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+            Sincronizar
+          </Button>
           <ExportButtons onExportPDF={handleExportPDF} onExportExcel={handleExportExcel} />
         </div>
       }
