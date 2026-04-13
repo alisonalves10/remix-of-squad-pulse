@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { KPICard } from "@/components/dashboard/KPICard";
@@ -11,10 +12,13 @@ import { BurndownChart } from "@/components/dashboard/BurndownChart";
 import { BurnupChart } from "@/components/dashboard/BurnupChart";
 import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText, CheckCircle, AlertTriangle, RotateCcw, Clock, Bug, Calendar, Search } from "lucide-react";
+import { FileText, CheckCircle, AlertTriangle, RotateCcw, Clock, Bug, Calendar, Search, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { useSprintDetailData } from "@/hooks/useSprintDetailData";
 import { useExport } from "@/hooks/useExport";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 const SprintDetail = () => {
   const { id } = useParams();
