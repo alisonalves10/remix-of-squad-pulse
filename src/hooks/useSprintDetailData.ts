@@ -40,7 +40,7 @@ export function useSprintDetailData(sprintId?: string) {
       const [workItemsRes, metricsRes, progressRes, usersRes] = await Promise.all([
         supabase
           .from("work_items")
-          .select("id, type, title, state, story_points, original_estimate, remaining_work, completed_work, is_spillover, assigned_to_user_id, created_at, completed_at")
+          .select("id, type, title, state, story_points, original_estimate, remaining_work, completed_work, is_spillover, assigned_to_user_id, created_at, completed_at, parent_id")
           .eq("sprint_id", sprint.id)
           .order("id"),
         supabase
@@ -158,9 +158,88 @@ export function useSprintDetailData(sprintId?: string) {
       const completedHours = Number(metrics?.completed_hours ?? 0);
       const commitment = plannedHours > 0 ? Math.round((completedHours / plannedHours) * 100) : 0;
 
-      // Get unique types and states for filters
-      const types = [...new Set(workItems.map((wi) => wi.type))].sort();
-      const states = [...new Set(workItems.map((wi) => wi.state))].sort();
+      // Get unique types and states for filters (only operational types for the work items table)
+      const operationalTypes = ["Task", "Bug", "Issue", "Speed"];
+      const operationalItems = workItems.filter((wi) => operationalTypes.includes(wi.type));
+      const types = [...new Set(operationalItems.map((wi) => wi.type))].sort();
+      const states = [...new Set(operationalItems.map((wi) => wi.state))].sort();
+
+      // Build work item lookup map by id
+      const wiMap = new Map<number, typeof workItems[0]>();
+      workItems.forEach((wi) => wiMap.set(wi.id, wi));
+
+      // Build parent name lookup for operational items
+      const operationalItemsWithParent = operationalItems.map((wi) => ({
+        ...wi,
+        parent_title: wi.parent_id ? wiMap.get(wi.parent_id)?.title || null : null,
+        parent_type: wi.parent_id ? wiMap.get(wi.parent_id)?.type || null : null,
+      }));
+
+      // Build hierarchy tree for management view (Epic → Feature → User Story)
+      const managementTypes = ["Epic", "Feature", "User Story"];
+      const managementItems = workItems.filter((wi) => managementTypes.includes(wi.type));
+
+      // Build tree: Epic → Features → User Stories
+      type HierarchyNode = {
+        item: typeof workItems[0];
+        children: HierarchyNode[];
+      };
+
+      const epicNodes: HierarchyNode[] = [];
+      const orphanFeatures: HierarchyNode[] = [];
+      const orphanStories: HierarchyNode[] = [];
+
+      const epics = managementItems.filter((wi) => wi.type === "Epic");
+      const features = managementItems.filter((wi) => wi.type === "Feature");
+      const stories = managementItems.filter((wi) => wi.type === "User Story");
+
+      // Map features by parent_id (Epic)
+      const featuresByParent = new Map<number, typeof features>();
+      features.forEach((f) => {
+        const pid = f.parent_id;
+        if (pid) {
+          if (!featuresByParent.has(pid)) featuresByParent.set(pid, []);
+          featuresByParent.get(pid)!.push(f);
+        }
+      });
+
+      // Map stories by parent_id (Feature or Epic)
+      const storiesByParent = new Map<number, typeof stories>();
+      stories.forEach((s) => {
+        const pid = s.parent_id;
+        if (pid) {
+          if (!storiesByParent.has(pid)) storiesByParent.set(pid, []);
+          storiesByParent.get(pid)!.push(s);
+        }
+      });
+
+      // Build epic trees
+      epics.forEach((epic) => {
+        const epicFeatures = featuresByParent.get(epic.id) || [];
+        const featureNodes: HierarchyNode[] = epicFeatures.map((f) => ({
+          item: f,
+          children: (storiesByParent.get(f.id) || []).map((s) => ({ item: s, children: [] })),
+        }));
+        // Also attach stories directly under epic (no feature in between)
+        const directStories = (storiesByParent.get(epic.id) || []).map((s) => ({ item: s, children: [] }));
+        epicNodes.push({ item: epic, children: [...featureNodes, ...directStories] });
+      });
+
+      // Orphan features (no parent epic in sprint)
+      features.filter((f) => !f.parent_id || !epics.some((e) => e.id === f.parent_id)).forEach((f) => {
+        orphanFeatures.push({
+          item: f,
+          children: (storiesByParent.get(f.id) || []).map((s) => ({ item: s, children: [] })),
+        });
+      });
+
+      // Orphan stories (no parent feature/epic in sprint)
+      const allParentIds = new Set([...epics.map((e) => e.id), ...features.map((f) => f.id)]);
+      stories.filter((s) => !s.parent_id || !allParentIds.has(s.parent_id)).forEach((s) => {
+        orphanStories.push({ item: s, children: [] });
+      });
+
+      const hierarchyTree = [...epicNodes, ...orphanFeatures, ...orphanStories];
 
       // Group sprints by squad_id
       const sprintsBySquad: Record<string, Array<{ id: string; name: string; squad_id: string; start_date: string; end_date: string; is_closed: boolean | null }>> = {};
@@ -182,7 +261,8 @@ export function useSprintDetailData(sprintId?: string) {
           squad_id: s.squad_id,
           squadName: (s as any).squads?.name || "—",
         })),
-        workItems,
+        workItems: operationalItemsWithParent,
+        hierarchyTree,
         totalItems,
         completedItems,
         spilloverItems,

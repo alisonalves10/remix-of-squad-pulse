@@ -433,6 +433,16 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
     const completedWork = wi.fields["Microsoft.VSTS.Scheduling.CompletedWork"] || 0;
     const completedAt = state === "Done" || state === "Closed" ? (wi.fields["Microsoft.VSTS.Common.ClosedDate"] || null) : null;
 
+    // Extract parent_id from hierarchy relations
+    let parentId: number | null = null;
+    if (wi.relations && Array.isArray(wi.relations)) {
+      const parentRel = wi.relations.find((r: any) => r.rel === "System.LinkTypes.Hierarchy-Reverse");
+      if (parentRel?.url) {
+        const match = parentRel.url.match(/\/workItems\/(\d+)$/);
+        if (match) parentId = parseInt(match[1], 10);
+      }
+    }
+
     await supabase.from("work_items").insert({
       id: wi.id,
       sprint_id: sprint.id,
@@ -444,6 +454,7 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
       completed_work: completedWork,
       completed_at: completedAt,
       is_spillover: false,
+      parent_id: parentId,
     });
     totalSynced++;
   }

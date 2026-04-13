@@ -7,12 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { BurndownChart } from "@/components/dashboard/BurndownChart";
 import { BurnupChart } from "@/components/dashboard/BurnupChart";
 import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText, CheckCircle, AlertTriangle, RotateCcw, Clock, Bug, Calendar, Search, RefreshCw } from "lucide-react";
+import { FileText, CheckCircle, AlertTriangle, RotateCcw, Clock, Bug, Calendar, Search, RefreshCw, ChevronDown, ChevronRight, Layers, Star, BookOpen } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { useSprintDetailData } from "@/hooks/useSprintDetailData";
 import { useExport } from "@/hooks/useExport";
@@ -122,6 +123,7 @@ const SprintDetail = () => {
     sprintsBySquad,
     allSprints,
     workItems,
+    hierarchyTree,
     totalItems,
     completedItems,
     spilloverItems,
@@ -332,12 +334,32 @@ const SprintDetail = () => {
           </div>
         )}
 
+        {/* Hierarchy Panel - Management View */}
+        {hierarchyTree && hierarchyTree.length > 0 && (
+          <Card className="shadow-card">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Layers className="h-5 w-5 text-primary" />
+                Visão Gerencial — Épicos, Features e User Stories
+              </CardTitle>
+              <CardDescription>
+                Hierarquia de itens sendo trabalhados nesta sprint
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {hierarchyTree.map((node: any) => (
+                <HierarchyNode key={node.item.id} node={node} level={0} getTypeBadge={getTypeBadge} getStateBadge={getStateBadge} />
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Work Items Table */}
         <Card className="shadow-card">
           <CardHeader>
             <CardTitle className="text-lg">Work Items da Sprint</CardTitle>
             <CardDescription>
-              {filteredItems.length} de {totalItems} itens
+              {filteredItems.length} de {workItems.length} itens (Tasks, Bugs, Issues, Speed)
             </CardDescription>
 
             {/* Filters */}
@@ -383,6 +405,7 @@ const SprintDetail = () => {
                      <TableHead>ID</TableHead>
                      <TableHead>Tipo</TableHead>
                      <TableHead>Título</TableHead>
+                     <TableHead>US/Parent</TableHead>
                      <TableHead>Responsável</TableHead>
                      <TableHead>Estado</TableHead>
                      <TableHead className="text-right">Estimativa (h)</TableHead>
@@ -397,6 +420,14 @@ const SprintDetail = () => {
                       <TableCell className="font-mono text-sm">{item.id}</TableCell>
                       <TableCell>{getTypeBadge(item.type)}</TableCell>
                        <TableCell className="max-w-[300px] truncate">{item.title}</TableCell>
+                       <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">
+                         {(item as any).parent_title ? (
+                           <span className="flex items-center gap-1">
+                             <BookOpen className="h-3 w-3 shrink-0" />
+                             {(item as any).parent_title}
+                           </span>
+                         ) : "—"}
+                       </TableCell>
                        <TableCell className="text-sm">{(item as any).assigned_to_name || "—"}</TableCell>
                        <TableCell>{getStateBadge(item.state)}</TableCell>
                        <TableCell className="text-right font-mono">
@@ -415,7 +446,7 @@ const SprintDetail = () => {
                   ))}
                   {filteredItems.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                         Nenhum item encontrado com os filtros aplicados.
                       </TableCell>
                     </TableRow>
@@ -427,6 +458,65 @@ const SprintDetail = () => {
         </Card>
       </div>
     </AppLayout>
+  );
+};
+
+/** Recursive hierarchy node component */
+const HierarchyNode = ({ node, level, getTypeBadge, getStateBadge }: {
+  node: { item: any; children: any[] };
+  level: number;
+  getTypeBadge: (type: string) => React.ReactNode;
+  getStateBadge: (state: string) => React.ReactNode;
+}) => {
+  const [open, setOpen] = useState(true);
+  const hasChildren = node.children.length > 0;
+  const paddingLeft = level * 24;
+
+  const icon = node.item.type === "Epic" ? (
+    <Star className="h-4 w-4 text-primary shrink-0" />
+  ) : node.item.type === "Feature" ? (
+    <Layers className="h-4 w-4 text-primary shrink-0" />
+  ) : (
+    <BookOpen className="h-4 w-4 text-primary shrink-0" />
+  );
+
+  if (!hasChildren) {
+    return (
+      <div
+        className="flex items-center gap-2 py-1.5 px-3 rounded-md hover:bg-muted/50 text-sm"
+        style={{ paddingLeft: paddingLeft + 28 }}
+      >
+        {icon}
+        {getTypeBadge(node.item.type)}
+        <span className="truncate flex-1">{node.item.title}</span>
+        {getStateBadge(node.item.state)}
+        <span className="font-mono text-xs text-muted-foreground">#{node.item.id}</span>
+      </div>
+    );
+  }
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <button
+          className="flex items-center gap-2 py-1.5 px-3 rounded-md hover:bg-muted/50 text-sm w-full text-left"
+          style={{ paddingLeft }}
+        >
+          {open ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
+          {icon}
+          {getTypeBadge(node.item.type)}
+          <span className="truncate flex-1 font-medium">{node.item.title}</span>
+          {getStateBadge(node.item.state)}
+          <span className="font-mono text-xs text-muted-foreground">#{node.item.id}</span>
+          <Badge variant="secondary" className="text-xs">{node.children.length}</Badge>
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        {node.children.map((child: any) => (
+          <HierarchyNode key={child.item.id} node={child} level={level + 1} getTypeBadge={getTypeBadge} getStateBadge={getStateBadge} />
+        ))}
+      </CollapsibleContent>
+    </Collapsible>
   );
 };
 
