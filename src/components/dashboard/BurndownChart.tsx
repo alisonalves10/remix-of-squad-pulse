@@ -4,7 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 interface BurndownChartProps {
   data: Array<{
     date: string;
-    remaining: number;
+    remaining: number | null;
     ideal: number;
   }>;
   title?: string;

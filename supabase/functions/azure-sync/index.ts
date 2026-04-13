@@ -100,17 +100,27 @@ Deno.serve(async (req) => {
     for (const areaPath of areaPaths) {
       try {
         if (syncAllIterations) {
-          // Historical mode: sync all 2026 iterations for this area path
+          // Historical mode: sync all 2026 iterations for this area path in chunks of 5
           const azureBase = `https://dev.azure.com/${organization}/${project}`;
           const allIterations = await findAllIterations2026(azureBase, azureHeaders);
           console.log(`[${areaPath}] Historical sync: found ${allIterations.length} iterations for 2026`);
-          for (const iter of allIterations) {
-            try {
-              const result = await syncAreaPath(supabase, organization, project, areaPath, azureHeaders, iter);
-              results.push(result);
-            } catch (err) {
-              console.error(`[${areaPath}] Error syncing iteration ${iter.name}:`, err);
-              results.push({ areaPath, synced: 0, error: `${iter.name}: ${String(err)}` });
+          const CHUNK_SIZE = 5;
+          for (let c = 0; c < allIterations.length; c += CHUNK_SIZE) {
+            const chunk = allIterations.slice(c, c + CHUNK_SIZE);
+            console.log(`[${areaPath}] Processing chunk ${Math.floor(c / CHUNK_SIZE) + 1}/${Math.ceil(allIterations.length / CHUNK_SIZE)} (iterations ${c + 1}-${Math.min(c + CHUNK_SIZE, allIterations.length)})`);
+            // Process chunk iterations concurrently
+            const chunkResults = await Promise.allSettled(
+              chunk.map(async (iter) => {
+                try {
+                  return await syncAreaPath(supabase, organization, project, areaPath, azureHeaders, iter);
+                } catch (err) {
+                  console.error(`[${areaPath}] Error syncing iteration ${iter.name}:`, err);
+                  return { areaPath, synced: 0, error: `${iter.name}: ${String(err)}` } as SyncResult;
+                }
+              })
+            );
+            for (const r of chunkResults) {
+              results.push(r.status === "fulfilled" ? r.value : { areaPath, synced: 0, error: String((r as any).reason) });
             }
           }
         } else {

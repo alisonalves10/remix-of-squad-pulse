@@ -4,8 +4,8 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 interface BurnupChartProps {
   data: Array<{
     date: string;
-    completed: number;
-    scope: number;
+    completed: number | null;
+    scope: number | null;
   }>;
   title?: string;
   description?: string;
