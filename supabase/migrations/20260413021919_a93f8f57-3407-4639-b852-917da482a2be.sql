@@ -1,0 +1,1 @@
+DELETE FROM sprint_progress_daily WHERE id = '5bf9502b-8586-412c-af22-0521e4abbad8';
