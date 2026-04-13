@@ -88,7 +88,7 @@ export function useSprintDetailData(sprintId?: string) {
 
       // Timeline always ends at sprint end date
       const sprintDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000));
-      const totalTimelineDays = Math.round((timelineEnd.getTime() - start.getTime()) / 86400000);
+      const totalTimelineDays = sprintDays;
 
       let hasSeenActual = false;
 
