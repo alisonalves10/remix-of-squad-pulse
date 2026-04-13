@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, Save, Eye, EyeOff, Plus, X } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RefreshCw, Save, Eye, EyeOff, Plus, X, FolderTree } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,7 +26,8 @@ const Settings = () => {
 
   const [areaPaths, setAreaPaths] = useState<string[]>([]);
   const [newAreaPath, setNewAreaPath] = useState("");
-
+  const [availableAreaPaths, setAvailableAreaPaths] = useState<string[]>([]);
+  const [isLoadingAreas, setIsLoadingAreas] = useState(false);
   useEffect(() => {
     loadConfig();
   }, []);
@@ -95,6 +97,36 @@ const Settings = () => {
     if (e.key === "Enter") {
       e.preventDefault();
       handleAddAreaPath();
+    }
+  };
+
+  const handleDiscoverAreaPaths = async () => {
+    if (!config.organization || !config.project) {
+      toast({ title: "Configure primeiro", description: "Preencha organização e projeto antes de buscar.", variant: "destructive" });
+      return;
+    }
+    setIsLoadingAreas(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("azure-list-areas");
+      if (error) {
+        toast({ title: "Erro ao buscar", description: error.message, variant: "destructive" });
+      } else if (data?.error) {
+        toast({ title: "Erro", description: data.error, variant: "destructive" });
+      } else {
+        setAvailableAreaPaths(data.areaPaths || []);
+        toast({ title: "Area Paths encontrados", description: `${(data.areaPaths || []).length} Area Paths disponíveis no projeto.` });
+      }
+    } catch (err: any) {
+      toast({ title: "Erro", description: err.message, variant: "destructive" });
+    }
+    setIsLoadingAreas(false);
+  };
+
+  const handleToggleAreaPath = (path: string) => {
+    if (areaPaths.includes(path)) {
+      setAreaPaths(areaPaths.filter((p) => p !== path));
+    } else {
+      setAreaPaths([...areaPaths, path]);
     }
   };
 
@@ -186,15 +218,57 @@ const Settings = () => {
 
         <Card className="shadow-card">
           <CardHeader>
+            <CardTitle className="text-lg">Descobrir Area Paths</CardTitle>
+            <CardDescription>Busque os Area Paths disponíveis diretamente do Azure DevOps</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Button variant="outline" onClick={handleDiscoverAreaPaths} disabled={isLoadingAreas}>
+              <FolderTree className={`mr-2 h-4 w-4 ${isLoadingAreas ? "animate-spin" : ""}`} />
+              {isLoadingAreas ? "Buscando..." : "Buscar Area Paths do Azure DevOps"}
+            </Button>
+
+            {availableAreaPaths.length > 0 && (
+              <div className="space-y-2">
+                <Label>Area Paths disponíveis ({availableAreaPaths.length})</Label>
+                <div className="border rounded-md max-h-64 overflow-y-auto divide-y">
+                  {availableAreaPaths.map((path) => {
+                    const isSelected = areaPaths.includes(path);
+                    return (
+                      <label
+                        key={path}
+                        className="flex items-center gap-3 px-3 py-2 hover:bg-muted/50 cursor-pointer"
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => handleToggleAreaPath(path)}
+                        />
+                        <span className="text-sm">{path}</span>
+                        {isSelected && (
+                          <Badge variant="default" className="ml-auto text-xs">Selecionado</Badge>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Marque os Area Paths que deseja sincronizar. Lembre-se de salvar as configurações após selecionar.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-card">
+          <CardHeader>
             <CardTitle className="text-lg">Sincronização</CardTitle>
             <CardDescription>Importe dados do Azure DevOps para o portal</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Area Paths (Times)</Label>
+              <Label>Area Paths selecionados ({areaPaths.length})</Label>
               <div className="flex gap-2">
                 <Input
-                  placeholder="Nome do Area Path (ex: Backoffice)"
+                  placeholder="Adicionar manualmente (ex: Backoffice)"
                   value={newAreaPath}
                   onChange={(e) => setNewAreaPath(e.target.value)}
                   onKeyDown={handleKeyDown}
@@ -204,7 +278,6 @@ const Settings = () => {
                   Adicionar
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">Adicione os Area Paths dos times que deseja sincronizar</p>
 
               {areaPaths.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2">
