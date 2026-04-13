@@ -82,8 +82,8 @@ export function useSprintDetailData(sprintId?: string) {
       let burndownData: Array<{ date: string; remaining: number | null; ideal: number }> = [];
       let burnupData: Array<{ date: string; completed: number | null; scope: number | null }> = [];
 
-      const start = new Date(sprint.start_date);
-      const end = new Date(sprint.end_date);
+      const start = parseLocalDate(sprint.start_date);
+      const end = parseLocalDate(sprint.end_date);
       const today = new Date();
       today.setHours(23, 59, 59, 999);
 
