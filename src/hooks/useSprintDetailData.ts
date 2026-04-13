@@ -110,7 +110,7 @@ export function useSprintDetailData(sprintId?: string) {
         const d = new Date(start);
         d.setDate(d.getDate() + i);
         const label = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-        const dateKey = d.toISOString().split("T")[0];
+        const dateKey = formatDateKey(d);
 
         // Ideal line only spans the official sprint range
         const ideal = i <= sprintDays
