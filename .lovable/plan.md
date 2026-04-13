@@ -1,30 +1,31 @@
 
 
-# Fix: Token expira durante sincronização histórica longa
+# Fix: Sprint 7 faltando + gráficos burndown/burnup não carregam
 
-## Problema
-A sincronização histórica de 23 times × ~8 iterações cada leva muito tempo. O access token do usuário expira durante o processo, causando:
-- **"Failed to fetch"** nos primeiros times (timeout de 5 minutos excedido por time com 8+ iterações)
-- **"Unauthorized"** nos times seguintes (token expirado)
+## Problema 1: Sprint 7 ausente para 4 times
+A Sprint 7 está faltando para **Backoffice, Sellers e Produtos, Arquitetura e Inovação, E-Commerce**. Isso ocorreu porque a sincronização histórica desses times falhou com "Failed to fetch" (timeout de 5 min excedido para processar 23 iterações por time).
 
-## Solução
+**Causa raiz**: a edge function tenta sincronizar todas as 23 iterações de 2026 numa única chamada, e para times com muitos work items, isso excede o timeout.
 
-### 1. Refresh do token antes de cada requisição (`src/pages/Settings.tsx`)
-No loop do `handleSync`, chamar `supabase.auth.getSession()` antes de cada chamada para garantir um token fresco:
+**Solução**: No frontend (`src/pages/Settings.tsx`), ao usar `syncAllIterations`, limitar o envio a **lotes menores** — enviar as iterações em grupos (ex: 5 por chamada) ou enviar uma iteração por chamada. Alternativa mais simples: apenas re-executar a sincronização histórica para os times que falharam, pois os dados já parcialmente sincronizados são preservados (upsert).
 
-```typescript
-for (let i = 0; i < areaPaths.length; i++) {
-  // Refresh token before each call
-  const { data: { session: freshSession } } = await supabase.auth.getSession();
-  // use freshSession.access_token in the fetch
-}
-```
+Na prática, a correção mais efetiva é **dividir as iterações no lado do edge function**: aceitar um parâmetro `maxIterations` ou processar em chunks internamente, respondendo antes do timeout.
 
-### 2. Usar service role no edge function para chamadas históricas (`supabase/functions/azure-sync/index.ts`)
-Alternativa mais robusta: quando `syncAllIterations` é true, o edge function já usa o service role client para queries. O problema é apenas a **autenticação inicial** do usuário. O token precisa ser válido apenas na hora da chamada HTTP.
+## Problema 2: Gráficos burndown/burnup não renderizam
+Os componentes `BurndownChart` e `BurnupChart` declaram interfaces com tipos `number`, mas o hook `useSprintDetailData` retorna `number | null` nos campos `remaining`, `completed` e `scope`. O Recharts não renderiza linhas quando recebe `null` em campos tipados como `number`.
 
-O refresh no frontend resolve isso — o `getSession()` do Supabase automaticamente renova tokens expirados.
+**Solução**: Atualizar as interfaces dos dois componentes para aceitar `number | null`:
 
-## Arquivo alterado
-- `src/pages/Settings.tsx` — mover `getSession()` para dentro do loop, antes de cada `fetch`
+- **`BurndownChart.tsx`**: Mudar `remaining: number` para `remaining: number | null`
+- **`BurnupChart.tsx`**: Mudar `completed: number` e `scope: number` para `number | null`
+
+## Arquivos alterados
+1. `src/components/dashboard/BurndownChart.tsx` — interface aceitar `null`
+2. `src/components/dashboard/BurnupChart.tsx` — interface aceitar `null`
+3. `supabase/functions/azure-sync/index.ts` — dividir iterações em chunks de 5 para evitar timeout
+4. `src/pages/Settings.tsx` — aumentar timeout do fetch para histórico ou enviar iterações individualmente
+
+## Impacto
+- Gráficos passam a renderizar corretamente para todas as sprints com dados
+- Sincronização histórica não excede mais o timeout de 5 minutos
 
