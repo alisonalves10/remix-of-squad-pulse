@@ -480,6 +480,12 @@ const HierarchyNode = ({ node, level, getTypeBadge, getStateBadge }: {
     <BookOpen className="h-4 w-4 text-primary shrink-0" />
   );
 
+  const spilloverBadge = node.item.is_spillover ? (
+    <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-orange-400 text-orange-600 dark:text-orange-400 whitespace-nowrap">
+      Spillover
+    </Badge>
+  ) : null;
+
   if (!hasChildren) {
     return (
       <div
@@ -489,6 +495,7 @@ const HierarchyNode = ({ node, level, getTypeBadge, getStateBadge }: {
       {icon}
         {getTypeBadge(node.item.type)}
         <span className="truncate flex-1">{node.item.title}</span>
+        {spilloverBadge}
         {getStateBadge(node.item.state)}
         <span className="font-mono text-xs text-muted-foreground">#{node.item.id}</span>
       </div>
@@ -506,6 +513,7 @@ const HierarchyNode = ({ node, level, getTypeBadge, getStateBadge }: {
           {icon}
           {getTypeBadge(node.item.type)}
           <span className="truncate flex-1 font-medium">{node.item.title}</span>
+          {spilloverBadge}
           {getStateBadge(node.item.state)}
           <span className="font-mono text-xs text-muted-foreground">#{node.item.id}</span>
           <Badge variant="secondary" className="text-xs">{node.children.length}</Badge>
