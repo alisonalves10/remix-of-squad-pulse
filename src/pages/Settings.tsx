@@ -136,6 +136,9 @@ const Settings = () => {
       return;
     }
 
+    // Auto-save config before syncing to avoid losing area paths
+    await handleSaveConfig();
+
     setIsSyncing(true);
     try {
       const { data, error } = await supabase.functions.invoke("azure-sync", {
