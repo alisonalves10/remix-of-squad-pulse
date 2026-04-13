@@ -498,6 +498,11 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
     const sprintIterPath = iterPath;
     const isSpillover = itemIterPath !== sprintIterPath;
 
+    // Resolve assigned user
+    const assignedTo = wi.fields["System.AssignedTo"];
+    const assignedKey = assignedTo?.uniqueName?.toLowerCase();
+    const assignedToUserId = assignedKey ? (userMap.get(assignedKey) || null) : null;
+
     await supabase.from("work_items").insert({
       id: wi.id,
       sprint_id: sprint.id,
@@ -510,6 +515,7 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
       completed_at: completedAt,
       is_spillover: isSpillover,
       parent_id: parentId,
+      assigned_to_user_id: assignedToUserId,
     });
     totalSynced++;
   }
