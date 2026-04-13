@@ -221,9 +221,10 @@ export function useSprintDetailData(sprintId?: string) {
       const types = [...new Set(operationalItems.map((wi) => wi.type))].sort();
       const states = [...new Set(operationalItems.map((wi) => wi.state))].sort();
 
-      // Build work item lookup map by id
+      // Build work item lookup map by id (including cross-sprint items)
       const wiMap = new Map<number, typeof workItems[0]>();
       workItems.forEach((wi) => wiMap.set(wi.id, wi));
+      crossSprintItems.forEach((wi) => wiMap.set(wi.id, wi));
 
       // Build parent name lookup for operational items
       const operationalItemsWithParent = operationalItems.map((wi) => ({
@@ -233,8 +234,8 @@ export function useSprintDetailData(sprintId?: string) {
       }));
 
       // Build hierarchy tree for management view (Epic → Feature → User Story)
-      const managementTypes = ["Epic", "Feature", "User Story"];
-      const managementItems = workItems.filter((wi) => managementTypes.includes(wi.type));
+      const managementTypes2 = ["Epic", "Feature", "User Story"];
+      const managementItems = allItemsForHierarchy.filter((wi) => managementTypes2.includes(wi.type));
 
       // Build tree: Epic → Features → User Stories
       type HierarchyNode = {
