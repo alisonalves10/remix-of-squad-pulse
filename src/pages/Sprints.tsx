@@ -513,6 +513,7 @@ const HierarchyNode = ({ node, level, getTypeBadge, getStateBadge }: {
           {icon}
           {getTypeBadge(node.item.type)}
           <span className="truncate flex-1 font-medium">{node.item.title}</span>
+          {spilloverBadge}
           {getStateBadge(node.item.state)}
           <span className="font-mono text-xs text-muted-foreground">#{node.item.id}</span>
           <Badge variant="secondary" className="text-xs">{node.children.length}</Badge>
