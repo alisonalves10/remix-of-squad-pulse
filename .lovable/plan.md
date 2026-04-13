@@ -1,56 +1,64 @@
 
 
-# Navegação de Sprints com histórico por Squad
+# Fix: Times ausentes na sincronização e remoção de Area Path não persistindo
 
-## Situação atual
-- A página `/sprints` recebe um `id` opcional via URL e mostra um único seletor que mistura todas as squads e sprints
-- Ao acessar sem ID, mostra a primeira sprint da lista (ordenada por data desc)
-- O botão "Sincronizar" sempre aparece habilitado
-- Só existem 8 sprints no banco (1 por squad), mas conforme novas sprints forem criadas pela sincronização, o histórico se acumulará
+## Problemas identificados
 
-## Mudanças planejadas
+### 1. Times Infraestrutura, Arquitetura e Inovação, B2B e Instalação não aparecem
+Os logs mostram que o fallback de iteração no nível de projeto retorna **"Sprint 2"** (de agosto 2024) — uma iteração antiga do time padrão do projeto. O WIQL filtra por essa iteração antiga, não encontra work items, retorna `synced: 0`, e nenhuma squad é criada no banco.
 
-### 1. Reestruturar navegação com dois seletores (Sprints.tsx)
-- **Seletor de Squad**: lista todas as squads. Default = "Backoffice"
-- **Seletor de Sprint**: filtra sprints da squad selecionada, ordenadas por data desc. Default = sprint mais recente (vigente)
-- Ao trocar de squad, selecionar automaticamente a sprint vigente (não fechada) ou a mais recente
-- Ao trocar de sprint, atualizar a visualização sem mudar de squad
+A causa raiz: `fetchCurrentIteration` com a URL de projeto usa o time padrão do Azure DevOps, que pode ter uma configuração de iterações diferente/desatualizada.
 
-### 2. Botão Sincronizar condicional
-- Mostrar o botão "Sincronizar" apenas quando a sprint selecionada **não está fechada** (`is_closed !== true` e `end_date >= hoje`)
-- Para sprints passadas/fechadas, ocultar ou desabilitar o botão
+### 2. Remoção de Area Path não persiste
+Quando o usuário remove um Area Path clicando no "X" do badge, o `handleRemoveAreaPath` apenas atualiza o estado local. O usuário precisa clicar "Salvar Configurações" para persistir. Isso não é intuitivo.
 
-### 3. Atualizar hook useSprintDetailData
-- Aceitar `sprintId` como parâmetro (já aceita) — manter como está
-- Retornar também a lista de squads e sprints agrupadas para os seletores
+## Solução
 
-### 4. Gerenciar estado via URL
-- Manter a rota `/sprints/:id` para deep linking
-- Ao acessar `/sprints` sem ID, resolver para sprint vigente de Backoffice
+### 1. Edge function: buscar iteração correta por data (`azure-sync/index.ts`)
+
+Quando o fallback retorna uma iteração cujas datas não cobrem a data atual, listar **todas** as iterações do projeto e encontrar a que corresponde a "hoje":
+
+```typescript
+async function fetchCurrentIteration(baseUrl, headers): Promise<IterationInfo | null> {
+  // Tentar com $timeframe=current (como hoje)
+  const result = await tryFetchIteration(baseUrl, headers);
+  if (result && isIterationCurrent(result)) return result;
+  
+  // Se retornou uma iteração antiga, listar TODAS e buscar pela data
+  const allUrl = `${baseUrl}/_apis/work/teamsettings/iterations?api-version=7.0`;
+  const allRes = await fetch(allUrl, { headers });
+  if (allRes.ok) {
+    const data = await allRes.json();
+    const today = new Date().toISOString().split("T")[0];
+    const current = data.value.find(iter => 
+      iter.attributes?.startDate?.split("T")[0] <= today && 
+      iter.attributes?.finishDate?.split("T")[0] >= today
+    );
+    if (current) return { name: current.name, path: current.path, ... };
+  }
+  return result; // retorna o que tiver, mesmo antigo
+}
+```
+
+Isso garante que, mesmo quando o time padrão do projeto está desatualizado, a edge function encontra a iteração certa por sobreposição de datas.
+
+### 2. Auto-save dos Area Paths (`src/pages/Settings.tsx`)
+
+Adicionar `useEffect` que salva automaticamente quando `areaPaths` mudam (com debounce para evitar chamadas excessivas):
+
+```typescript
+useEffect(() => {
+  if (!configId || isLoading) return;
+  const timeout = setTimeout(() => {
+    handleSaveConfig();
+  }, 1000);
+  return () => clearTimeout(timeout);
+}, [areaPaths]);
+```
+
+Alternativa mais simples: chamar `handleSaveConfig()` diretamente dentro de `handleRemoveAreaPath` e `handleToggleAreaPath`.
 
 ## Arquivos alterados
-- `src/pages/Sprints.tsx` — substituir o seletor único por dois seletores (squad + sprint), lógica de default para Backoffice, condicional no botão sincronizar
-- `src/hooks/useSprintDetailData.ts` — ajustar para retornar squads e sprints agrupadas por squad nos dados de retorno
-
-## Detalhes técnicos
-
-No hook, adicionar query de squads e agrupar `allSprints` por `squad_id`:
-```typescript
-// Retornar squads e sprints agrupadas
-squads: squadsData,
-sprintsBySquad: sprints grouped by squad_id
-```
-
-Na página, gerenciar dois estados: `selectedSquadId` e o sprint ID via URL:
-```typescript
-const [selectedSquadId, setSelectedSquadId] = useState<string | null>(null);
-// Ao carregar dados, se não há squad selecionada, usar Backoffice
-// Ao trocar squad, navegar para sprint vigente dessa squad
-```
-
-Botão sincronizar:
-```typescript
-const isSprintActive = !sprint.is_closed && sprint.end_date >= todayStr;
-// Renderizar botão apenas se isSprintActive
-```
+- `supabase/functions/azure-sync/index.ts` — melhorar `fetchCurrentIteration` para buscar por data quando o resultado é antigo
+- `src/pages/Settings.tsx` — auto-save ao modificar area paths
 
