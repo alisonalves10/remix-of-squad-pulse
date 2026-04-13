@@ -256,6 +256,61 @@ async function findIterationByDate(baseUrl: string, headers: Record<string, stri
   }
 }
 
+function isIterationCurrent(iter: IterationInfo): boolean {
+  const today = new Date().toISOString().split("T")[0];
+  const start = iter.startDate?.split("T")[0] || "";
+  const end = iter.endDate?.split("T")[0] || "";
+  if (!start || !end) return false;
+  return start <= today && today <= end;
+}
+
+async function findIterationByClassificationNodes(azureBase: string, headers: Record<string, string>): Promise<IterationInfo | null> {
+  try {
+    const url = `${azureBase}/_apis/wit/classificationnodes/Iterations?$depth=10&api-version=7.0`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      console.warn(`[classificationNodes] Failed: ${res.status}`);
+      return null;
+    }
+    const data = await res.json();
+    const today = new Date().toISOString().split("T")[0];
+    const found = findNodeByDate(data, today);
+    if (found) {
+      console.log(`[classificationNodes] Found matching iteration: ${found.name} (${found.startDate} to ${found.endDate})`);
+    } else {
+      console.warn(`[classificationNodes] No iteration covers today (${today})`);
+    }
+    return found;
+  } catch (err) {
+    console.error("[classificationNodes] Error:", err);
+    return null;
+  }
+}
+
+function findNodeByDate(node: any, today: string): IterationInfo | null {
+  if (node.attributes) {
+    const start = node.attributes.startDate?.split("T")[0];
+    const end = node.attributes.finishDate?.split("T")[0];
+    if (start && end && start <= today && today <= end) {
+      const rawPath = node.path || "";
+      const cleanPath = rawPath.replace(/\\Iteration\\/, "\\").replace(/\\Iteration$/, "");
+      return {
+        name: node.name,
+        path: cleanPath || node.name,
+        startDate: node.attributes.startDate,
+        endDate: node.attributes.finishDate,
+      };
+    }
+  }
+  if (node.children) {
+    for (const child of node.children) {
+      const found = findNodeByDate(child, today);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 async function fetchWorkItemDetails(azureBase: string, headers: Record<string, string>, ids: number[]): Promise<AzureWorkItem[]> {
   const allItems: AzureWorkItem[] = [];
   for (let i = 0; i < ids.length; i += 200) {
