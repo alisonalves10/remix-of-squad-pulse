@@ -40,7 +40,9 @@ export function useSprintDetailData(sprintId?: string) {
       const [workItemsRes, metricsRes, progressRes, usersRes] = await Promise.all([
         supabase
           .from("work_items")
-          .select("id, type, title, state, story_points, original_estimate, remaining_work, completed_work, is_spillover, assigned_to_user_id, created_at, completed_at")
+          .select("id, type, title, state, story_points, original_estimate, remaining_work, completed_work, is_spillover, assigned_to_user_id, created_at, completed_at, parent_id")
+          .eq("sprint_id", sprint.id)
+          .order("id"),
           .eq("sprint_id", sprint.id)
           .order("id"),
         supabase
