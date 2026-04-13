@@ -371,26 +371,7 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
   }
 
   const currentIterPath = workItems.length > 0 ? workItems[0].fields["System.IterationPath"] : null;
-  if (currentIterPath) {
-    const { data: staleSprints } = await supabase
-      .from("sprints")
-      .select("id")
-      .eq("squad_id", squadId)
-      .neq("azure_iteration_path", currentIterPath);
-
-    if (staleSprints && staleSprints.length > 0) {
-      const staleIds = staleSprints.map((s: any) => s.id);
-      for (const sid of staleIds) {
-        await supabase.from("work_items").delete().eq("sprint_id", sid);
-        await supabase.from("metrics_snapshot").delete().eq("sprint_id", sid);
-        await supabase.from("sprint_progress_daily").delete().eq("sprint_id", sid);
-      }
-      for (const sid of staleIds) {
-        await supabase.from("sprints").delete().eq("id", sid);
-      }
-      console.log(`[${areaPath}] Cleaned up ${staleIds.length} stale sprints`);
-    }
-  }
+  // NOTE: Stale sprint cleanup removed to preserve historical data
 
   let startDate: string;
   let endDate: string;
