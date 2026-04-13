@@ -486,9 +486,12 @@ const HierarchyNode = ({ node, level, getTypeBadge, getStateBadge }: {
         className="flex items-center gap-2 py-1.5 px-3 rounded-md hover:bg-muted/50 text-sm"
         style={{ paddingLeft: paddingLeft + 28 }}
       >
-        {icon}
+      {icon}
         {getTypeBadge(node.item.type)}
         <span className="truncate flex-1">{node.item.title}</span>
+        {node.item.crossSprint && node.item.crossSprintName && (
+          <Badge variant="outline" className="text-xs border-dashed">{node.item.crossSprintName}</Badge>
+        )}
         {getStateBadge(node.item.state)}
         <span className="font-mono text-xs text-muted-foreground">#{node.item.id}</span>
       </div>
@@ -506,6 +509,9 @@ const HierarchyNode = ({ node, level, getTypeBadge, getStateBadge }: {
           {icon}
           {getTypeBadge(node.item.type)}
           <span className="truncate flex-1 font-medium">{node.item.title}</span>
+          {node.item.crossSprint && node.item.crossSprintName && (
+            <Badge variant="outline" className="text-xs border-dashed">{node.item.crossSprintName}</Badge>
+          )}
           {getStateBadge(node.item.state)}
           <span className="font-mono text-xs text-muted-foreground">#{node.item.id}</span>
           <Badge variant="secondary" className="text-xs">{node.children.length}</Badge>
