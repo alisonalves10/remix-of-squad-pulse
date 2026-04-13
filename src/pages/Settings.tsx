@@ -130,7 +130,7 @@ const Settings = () => {
     }
   };
 
-
+  const handleSync = async () => {
     if (areaPaths.length === 0) {
       toast({ title: "Nenhum Area Path", description: "Adicione pelo menos um Area Path para sincronizar.", variant: "destructive" });
       return;
