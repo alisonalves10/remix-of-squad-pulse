@@ -99,8 +99,24 @@ Deno.serve(async (req) => {
 
     for (const areaPath of areaPaths) {
       try {
-        const result = await syncAreaPath(supabase, organization, project, areaPath, azureHeaders);
-        results.push(result);
+        if (syncAllIterations) {
+          // Historical mode: sync all 2026 iterations for this area path
+          const azureBase = `https://dev.azure.com/${organization}/${project}`;
+          const allIterations = await findAllIterations2026(azureBase, azureHeaders);
+          console.log(`[${areaPath}] Historical sync: found ${allIterations.length} iterations for 2026`);
+          for (const iter of allIterations) {
+            try {
+              const result = await syncAreaPath(supabase, organization, project, areaPath, azureHeaders, iter);
+              results.push(result);
+            } catch (err) {
+              console.error(`[${areaPath}] Error syncing iteration ${iter.name}:`, err);
+              results.push({ areaPath, synced: 0, error: `${iter.name}: ${String(err)}` });
+            }
+          }
+        } else {
+          const result = await syncAreaPath(supabase, organization, project, areaPath, azureHeaders);
+          results.push(result);
+        }
       } catch (err) {
         console.error(`Error syncing area path ${areaPath}:`, err);
         results.push({ areaPath, synced: 0, error: String(err) });
