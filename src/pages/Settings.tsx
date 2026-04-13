@@ -141,12 +141,29 @@ const Settings = () => {
 
     setIsSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke("azure-sync", {
-        body: { areaPaths },
-      });
+      const { data: { session } } = await supabase.auth.getSession();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 300000);
 
-      if (error) {
-        toast({ title: "Erro na sincronização", description: error.message, variant: "destructive" });
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/azure-sync`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session?.access_token ?? ""}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({ areaPaths }),
+          signal: controller.signal,
+        }
+      );
+      clearTimeout(timeoutId);
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast({ title: "Erro na sincronização", description: data?.error || response.statusText, variant: "destructive" });
       } else if (data?.error) {
         toast({ title: "Erro na sincronização", description: data.error, variant: "destructive" });
       } else if (data?.results) {
@@ -168,7 +185,8 @@ const Settings = () => {
         toast({ title: "Sincronização concluída!", description: `${data?.synced || 0} work items sincronizados.` });
       }
     } catch (err: any) {
-      toast({ title: "Erro", description: err.message, variant: "destructive" });
+      const msg = err.name === "AbortError" ? "Timeout: a sincronização demorou mais de 5 minutos." : err.message;
+      toast({ title: "Erro", description: msg, variant: "destructive" });
     }
     setIsSyncing(false);
   };
