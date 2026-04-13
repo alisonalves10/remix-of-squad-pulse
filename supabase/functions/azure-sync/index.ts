@@ -190,6 +190,18 @@ async function syncAreaPath(
 
   const wiqlQuery = `SELECT [System.Id] FROM WorkItems WHERE [System.AreaPath] UNDER '${project}\\\\${areaPath}' AND ${iterationFilter} AND [System.State] <> 'Removed' ORDER BY [System.ChangedDate] DESC`;
 
+  // For closed sprints, use asOf to get items as they were at sprint end date
+  // This captures items that were later moved to another sprint (spillover)
+  const todayCheck = new Date().toISOString().split("T")[0];
+  const sprintEndDate = currentIteration?.endDate?.split("T")[0];
+  const isClosedSprint = sprintEndDate && sprintEndDate < todayCheck;
+  const wiqlBody: any = { query: wiqlQuery };
+  if (isClosedSprint && sprintEndDate) {
+    // asOf must be a full ISO datetime — use end of day on sprint end date
+    wiqlBody.asOf = `${sprintEndDate}T23:59:59Z`;
+    console.log(`[${areaPath}] Using asOf=${wiqlBody.asOf} for closed sprint ${currentIteration?.name}`);
+  }
+
   // Try WIQL with team base first, fallback to project base
   let wiqlData: any = null;
   const wiqlBases = useProjectLevel ? [azureBase] : [teamAzureBase, azureBase];
@@ -198,7 +210,7 @@ async function syncAreaPath(
     const wiqlRes = await fetch(`${base}/_apis/wit/wiql?api-version=7.0`, {
       method: "POST",
       headers: azureHeaders,
-      body: JSON.stringify({ query: wiqlQuery }),
+      body: JSON.stringify(wiqlBody),
     });
 
     if (wiqlRes.ok) {
