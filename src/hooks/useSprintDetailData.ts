@@ -74,59 +74,9 @@ export function useSprintDetailData(sprintId?: string) {
       const workItems = (workItemsRes.data || []).map((wi) => ({
         ...wi,
         assigned_to_name: wi.assigned_to_user_id ? usersMap.get(wi.assigned_to_user_id) || "—" : "—",
-        crossSprint: false,
-        crossSprintName: null as string | null,
       }));
       const metrics = metricsRes.data;
       const progressDaily = progressRes.data || [];
-
-      // --- Cross-sprint: fetch related parent/child items from other sprints ---
-      const currentItemIds = new Set(workItems.map((wi) => wi.id));
-      const missingParentIds = workItems
-        .filter((wi) => wi.parent_id && !currentItemIds.has(wi.parent_id))
-        .map((wi) => wi.parent_id!);
-      const managementTypeItems = workItems.filter((wi) => ["Epic", "Feature", "User Story"].includes(wi.type));
-      const managementIds = managementTypeItems.map((wi) => wi.id);
-
-      let crossSprintItems: typeof workItems = [];
-
-      if (missingParentIds.length > 0 || managementIds.length > 0) {
-        const [parentsRes, childrenRes] = await Promise.all([
-          missingParentIds.length > 0
-            ? supabase
-                .from("work_items")
-                .select("id, type, title, state, story_points, original_estimate, remaining_work, completed_work, is_spillover, assigned_to_user_id, created_at, completed_at, parent_id, sprint_id")
-                .in("id", [...new Set(missingParentIds)])
-                .neq("sprint_id", sprint.id)
-            : Promise.resolve({ data: [] as any[], error: null }),
-          managementIds.length > 0
-            ? supabase
-                .from("work_items")
-                .select("id, type, title, state, story_points, original_estimate, remaining_work, completed_work, is_spillover, assigned_to_user_id, created_at, completed_at, parent_id, sprint_id")
-                .in("parent_id", managementIds)
-                .neq("sprint_id", sprint.id)
-                .eq("squad_id", sprint.squad_id)
-            : Promise.resolve({ data: [] as any[], error: null }),
-        ]);
-
-        const sprintNameMap = new Map<string, string>();
-        sprints.forEach((s) => sprintNameMap.set(s.id, s.name));
-
-        const mergedCross = new Map<number, typeof workItems[0]>();
-        [...(parentsRes.data || []), ...(childrenRes.data || [])].forEach((wi: any) => {
-          if (!currentItemIds.has(wi.id) && !mergedCross.has(wi.id)) {
-            mergedCross.set(wi.id, {
-              ...wi,
-              assigned_to_name: wi.assigned_to_user_id ? usersMap.get(wi.assigned_to_user_id) || "—" : "—",
-              crossSprint: true,
-              crossSprintName: sprintNameMap.get(wi.sprint_id) || null,
-            });
-          }
-        });
-        crossSprintItems = Array.from(mergedCross.values());
-      }
-
-      const allItemsForHierarchy = [...workItems, ...crossSprintItems];
 
       // Filter work items for chart calculations (only Task, Issue, Bug, Speed)
       const chartTypes = ["Task", "Issue", "Bug", "Speed"];
