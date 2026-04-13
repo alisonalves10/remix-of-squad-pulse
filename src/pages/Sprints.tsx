@@ -246,7 +246,6 @@ const SprintDetail = () => {
               Sincronizar
             </Button>
           )}
-          </Button>
           <ExportButtons onExportPDF={handleExportPDF} onExportExcel={handleExportExcel} />
         </div>
       }
