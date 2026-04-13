@@ -73,21 +73,20 @@ export function useSprintDetailData(sprintId?: string) {
       const today = new Date();
       today.setHours(23, 59, 59, 999);
 
+      // Filter out any stale records beyond sprint end date
+      const filteredDaily = progressDaily.filter((d) => d.date <= sprint.end_date);
+
       // Build lookup from actual daily data
       const dailyMap = new Map<string, { remaining: number; completed: number; scope: number }>();
-      let lastActualDate = end;
-      progressDaily.forEach((d) => {
+      filteredDaily.forEach((d) => {
         dailyMap.set(d.date, {
           remaining: Number(d.remaining_points ?? 0),
           completed: Number(d.completed_points ?? 0),
           scope: Number(d.total_scope_points ?? 0),
         });
-        const dd = new Date(d.date);
-        if (dd > lastActualDate) lastActualDate = dd;
       });
 
-      // Timeline goes from start to max(end, lastActualDate)
-      const timelineEnd = lastActualDate > end ? lastActualDate : end;
+      // Timeline always ends at sprint end date
       const sprintDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000));
       const totalTimelineDays = Math.round((timelineEnd.getTime() - start.getTime()) / 86400000);
 
