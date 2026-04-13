@@ -86,8 +86,21 @@ const Settings = () => {
       toast({ title: "Duplicado", description: "Esse Area Path já foi adicionado.", variant: "destructive" });
       return;
     }
-    setAreaPaths([...areaPaths, trimmed]);
+    const updated = [...areaPaths, trimmed];
+    setAreaPaths(updated);
     setNewAreaPath("");
+    // Auto-save after adding
+    if (configId) {
+      const payload = {
+        area_paths: updated,
+        updated_at: new Date().toISOString(),
+      };
+      supabase.from("azure_config").update(payload).eq("id", configId).then(({ error }) => {
+        if (error) {
+          toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+        }
+      });
+    }
   };
 
   const handleRemoveAreaPath = (path: string) => {
