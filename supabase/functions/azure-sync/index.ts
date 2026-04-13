@@ -45,7 +45,6 @@ Deno.serve(async (req) => {
     const isCronCall = token === anonKey;
 
     if (!isCronCall) {
-      // Validate user auth for manual calls
       const userClient = createClient(supabaseUrl, anonKey, {
         global: { headers: { Authorization: authHeader } },
       });
@@ -77,7 +76,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Parse area paths from request body or fall back to azure_config
     let areaPaths: string[] = config.area_paths || ["Backoffice"];
     try {
       const body = await req.json();
@@ -126,25 +124,51 @@ async function syncAreaPath(
   const teamAzureBase = `https://dev.azure.com/${organization}/${project}/${encodeURIComponent(areaPath)}`;
   const azureBase = `https://dev.azure.com/${organization}/${project}`;
 
-  // 1. Fetch current iteration
-  const currentIteration = await fetchCurrentIteration(teamAzureBase, azureHeaders);
+  // 1. Fetch current iteration — try team-level first, then project-level fallback
+  let currentIteration = await fetchCurrentIteration(teamAzureBase, azureHeaders);
+  let useProjectLevel = false;
+
+  if (!currentIteration) {
+    console.log(`[${areaPath}] Team-level iteration failed, trying project-level fallback`);
+    currentIteration = await fetchCurrentIteration(azureBase, azureHeaders);
+    useProjectLevel = true;
+  }
   console.log(`[${areaPath}] Current iteration:`, JSON.stringify(currentIteration));
 
-  // 2. WIQL query
-  const wiqlQuery = `SELECT [System.Id] FROM WorkItems WHERE [System.AreaPath] UNDER '${project}\\\\${areaPath}' AND [System.IterationPath] = @CurrentIteration AND [System.State] <> 'Removed' ORDER BY [System.ChangedDate] DESC`;
-
-  const wiqlRes = await fetch(`${teamAzureBase}/_apis/wit/wiql?api-version=7.0`, {
-    method: "POST",
-    headers: azureHeaders,
-    body: JSON.stringify({ query: wiqlQuery }),
-  });
-
-  if (!wiqlRes.ok) {
-    const errText = await wiqlRes.text();
-    return { areaPath, synced: 0, error: `WIQL ${wiqlRes.status}: ${errText}` };
+  // 2. WIQL query — use explicit iteration path when available (avoids @CurrentIteration issues with project-level API)
+  let iterationFilter: string;
+  if (currentIteration?.path) {
+    iterationFilter = `[System.IterationPath] = '${currentIteration.path}'`;
+  } else {
+    iterationFilter = `[System.IterationPath] = @CurrentIteration`;
   }
 
-  const wiqlData = await wiqlRes.json();
+  const wiqlQuery = `SELECT [System.Id] FROM WorkItems WHERE [System.AreaPath] UNDER '${project}\\\\${areaPath}' AND ${iterationFilter} AND [System.State] <> 'Removed' ORDER BY [System.ChangedDate] DESC`;
+
+  // Try WIQL with team base first, fallback to project base
+  let wiqlData: any = null;
+  const wiqlBases = useProjectLevel ? [azureBase] : [teamAzureBase, azureBase];
+
+  for (const base of wiqlBases) {
+    const wiqlRes = await fetch(`${base}/_apis/wit/wiql?api-version=7.0`, {
+      method: "POST",
+      headers: azureHeaders,
+      body: JSON.stringify({ query: wiqlQuery }),
+    });
+
+    if (wiqlRes.ok) {
+      wiqlData = await wiqlRes.json();
+      break;
+    } else {
+      const errText = await wiqlRes.text();
+      console.warn(`[${areaPath}] WIQL failed on ${base}: ${wiqlRes.status} ${errText}`);
+    }
+  }
+
+  if (!wiqlData) {
+    return { areaPath, synced: 0, error: `WIQL failed on all endpoints` };
+  }
+
   const workItemIds = (wiqlData.workItems || []).map((wi: any) => wi.id).slice(0, 200);
 
   if (workItemIds.length === 0) {
@@ -155,12 +179,12 @@ async function syncAreaPath(
   return await syncToDatabase(supabase, workItems, organization, project, areaPath, currentIteration, azureHeaders);
 }
 
-async function fetchCurrentIteration(teamAzureBase: string, headers: Record<string, string>): Promise<IterationInfo | null> {
+async function fetchCurrentIteration(baseUrl: string, headers: Record<string, string>): Promise<IterationInfo | null> {
   try {
-    const url = `${teamAzureBase}/_apis/work/teamsettings/iterations?$timeframe=current&api-version=7.0`;
+    const url = `${baseUrl}/_apis/work/teamsettings/iterations?$timeframe=current&api-version=7.0`;
     const res = await fetch(url, { headers });
     if (!res.ok) {
-      console.error("Failed to fetch current iteration:", res.status, await res.text());
+      console.warn("Failed to fetch iteration from", baseUrl, ":", res.status);
       return null;
     }
     const data = await res.json();
@@ -175,7 +199,7 @@ async function fetchCurrentIteration(teamAzureBase: string, headers: Record<stri
       endDate: iter.attributes?.finishDate || null,
     };
   } catch (err) {
-    console.error("Error fetching current iteration:", err);
+    console.error("Error fetching iteration:", err);
     return null;
   }
 }
