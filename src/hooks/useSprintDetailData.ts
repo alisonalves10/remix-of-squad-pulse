@@ -19,13 +19,17 @@ export function useSprintDetailData(sprintId?: string) {
   return useQuery({
     queryKey: ["sprint-detail", sprintId ?? "default"],
     queryFn: async () => {
-      // Fetch all sprints with squad name
-      const { data: sprints, error: sprintsErr } = await supabase
-        .from("sprints")
-        .select("*, squads(name)")
-        .order("start_date", { ascending: false });
+      // Fetch all squads and sprints
+      const [squadsRes, sprintsRes] = await Promise.all([
+        supabase.from("squads").select("id, name").order("name"),
+        supabase.from("sprints").select("*, squads(name)").order("start_date", { ascending: false }),
+      ]);
 
-      if (sprintsErr) throw sprintsErr;
+      if (squadsRes.error) throw squadsRes.error;
+      if (sprintsRes.error) throw sprintsRes.error;
+
+      const squadsData = squadsRes.data || [];
+      const sprints = sprintsRes.data || [];
       if (!sprints || sprints.length === 0) return null;
 
       const sprint = sprintId
@@ -158,14 +162,24 @@ export function useSprintDetailData(sprintId?: string) {
       const types = [...new Set(workItems.map((wi) => wi.type))].sort();
       const states = [...new Set(workItems.map((wi) => wi.state))].sort();
 
+      // Group sprints by squad_id
+      const sprintsBySquad: Record<string, Array<{ id: string; name: string; squad_id: string; start_date: string; end_date: string; is_closed: boolean | null }>> = {};
+      sprints.forEach((s) => {
+        if (!sprintsBySquad[s.squad_id]) sprintsBySquad[s.squad_id] = [];
+        sprintsBySquad[s.squad_id].push({ id: s.id, name: s.name, squad_id: s.squad_id, start_date: s.start_date, end_date: s.end_date, is_closed: s.is_closed });
+      });
+
       return {
         sprint: {
           ...sprint,
           squadName: (sprint as any).squads?.name || "—",
         },
+        squads: squadsData,
+        sprintsBySquad,
         allSprints: sprints.map((s) => ({
           id: s.id,
           name: s.name,
+          squad_id: s.squad_id,
           squadName: (s as any).squads?.name || "—",
         })),
         workItems,

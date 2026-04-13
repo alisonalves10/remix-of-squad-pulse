@@ -13,7 +13,7 @@ import { BurnupChart } from "@/components/dashboard/BurnupChart";
 import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileText, CheckCircle, AlertTriangle, RotateCcw, Clock, Bug, Calendar, Search, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSprintDetailData } from "@/hooks/useSprintDetailData";
 import { useExport } from "@/hooks/useExport";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,12 +25,47 @@ const SprintDetail = () => {
   const navigate = useNavigate();
   const { exportToPDF, exportToExcel } = useExport();
   const queryClient = useQueryClient();
+  const [selectedSquadId, setSelectedSquadId] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [stateFilter, setStateFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
 
   const { data, isLoading } = useSprintDetailData(id);
+
+  // Once data loads, set default squad to Backoffice or current sprint's squad
+  useEffect(() => {
+    if (!data) return;
+    if (selectedSquadId) return; // already set
+    if (id) {
+      // If URL has sprint id, use its squad
+      setSelectedSquadId(data.sprint.squad_id);
+    } else {
+      // Default to Backoffice
+      const backoffice = data.squads.find((s) => s.name.toLowerCase() === "backoffice");
+      setSelectedSquadId(backoffice?.id || data.squads[0]?.id || null);
+    }
+  }, [data, id, selectedSquadId]);
+
+  // Sprints for the selected squad
+  const squadSprints = useMemo(() => {
+    if (!data || !selectedSquadId) return [];
+    return data.sprintsBySquad[selectedSquadId] || [];
+  }, [data, selectedSquadId]);
+
+  // Handle squad change: navigate to the most recent sprint of that squad
+  const handleSquadChange = (squadId: string) => {
+    setSelectedSquadId(squadId);
+    if (!data) return;
+    const sprints = data.sprintsBySquad[squadId] || [];
+    if (sprints.length > 0) {
+      navigate(`/sprints/${sprints[0].id}`);
+    }
+  };
+
+  // Check if current sprint is active (for sync button)
+  const todayStr = new Date().toISOString().split("T")[0];
+  const isSprintActive = data ? !data.sprint.is_closed && data.sprint.end_date >= todayStr : false;
 
   const handleResync = async () => {
     if (!data) return;
@@ -83,6 +118,8 @@ const SprintDetail = () => {
 
   const {
     sprint,
+    squads,
+    sprintsBySquad,
     allSprints,
     workItems,
     totalItems,
@@ -166,7 +203,22 @@ const SprintDetail = () => {
       title={sprint.name}
       description={`${sprint.squadName} • ${sprint.start_date} → ${sprint.end_date}`}
       actions={
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Select
+            value={selectedSquadId || ""}
+            onValueChange={handleSquadChange}
+          >
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Selecionar squad" />
+            </SelectTrigger>
+            <SelectContent>
+              {squads.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select
             value={sprint.id}
             onValueChange={(val) => navigate(`/sprints/${val}`)}
@@ -175,23 +227,25 @@ const SprintDetail = () => {
               <SelectValue placeholder="Selecionar sprint" />
             </SelectTrigger>
             <SelectContent>
-              {allSprints.map((s) => (
+              {squadSprints.map((s) => (
                 <SelectItem key={s.id} value={s.id}>
-                  {s.squadName} — {s.name}
+                  {s.name} {s.is_closed ? "(Fechada)" : ""}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={handleResync}
-            disabled={isSyncing}
-          >
-            <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
-            Sincronizar
-          </Button>
+          {isSprintActive && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={handleResync}
+              disabled={isSyncing}
+            >
+              <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+              Sincronizar
+            </Button>
+          )}
           <ExportButtons onExportPDF={handleExportPDF} onExportExcel={handleExportExcel} />
         </div>
       }
