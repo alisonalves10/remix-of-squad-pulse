@@ -24,11 +24,34 @@ const SprintDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { exportToPDF, exportToExcel } = useExport();
+  const queryClient = useQueryClient();
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [stateFilter, setStateFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const { data, isLoading } = useSprintDetailData(id);
+
+  const handleResync = async () => {
+    if (!data) return;
+    setIsSyncing(true);
+    try {
+      const { error } = await supabase.functions.invoke("azure-sync", {
+        body: { areaPaths: [data.sprint.squadName] },
+      });
+      if (error) throw error;
+      toast.success("Sincronização concluída", {
+        description: "Os dados de burndown foram atualizados.",
+      });
+      await queryClient.invalidateQueries({ queryKey: ["sprintDetail"] });
+    } catch (err: any) {
+      toast.error("Erro na sincronização", {
+        description: err.message || "Tente novamente mais tarde.",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   if (isLoading) {
     return (
