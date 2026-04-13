@@ -26,7 +26,8 @@ const Settings = () => {
 
   const [areaPaths, setAreaPaths] = useState<string[]>([]);
   const [newAreaPath, setNewAreaPath] = useState("");
-
+  const [availableAreaPaths, setAvailableAreaPaths] = useState<string[]>([]);
+  const [isLoadingAreas, setIsLoadingAreas] = useState(false);
   useEffect(() => {
     loadConfig();
   }, []);
