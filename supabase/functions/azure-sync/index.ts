@@ -77,12 +77,16 @@ Deno.serve(async (req) => {
     }
 
     let areaPaths: string[] = config.area_paths || ["Backoffice"];
+    let syncAllIterations = false;
     try {
       const body = await req.json();
       if (body.areaPaths && Array.isArray(body.areaPaths)) {
         areaPaths = body.areaPaths;
       } else if (body.areaPath) {
         areaPaths = [body.areaPath];
+      }
+      if (body.syncAllIterations === true) {
+        syncAllIterations = true;
       }
     } catch { /* use config defaults for cron calls */ }
 
@@ -95,8 +99,24 @@ Deno.serve(async (req) => {
 
     for (const areaPath of areaPaths) {
       try {
-        const result = await syncAreaPath(supabase, organization, project, areaPath, azureHeaders);
-        results.push(result);
+        if (syncAllIterations) {
+          // Historical mode: sync all 2026 iterations for this area path
+          const azureBase = `https://dev.azure.com/${organization}/${project}`;
+          const allIterations = await findAllIterations2026(azureBase, azureHeaders);
+          console.log(`[${areaPath}] Historical sync: found ${allIterations.length} iterations for 2026`);
+          for (const iter of allIterations) {
+            try {
+              const result = await syncAreaPath(supabase, organization, project, areaPath, azureHeaders, iter);
+              results.push(result);
+            } catch (err) {
+              console.error(`[${areaPath}] Error syncing iteration ${iter.name}:`, err);
+              results.push({ areaPath, synced: 0, error: `${iter.name}: ${String(err)}` });
+            }
+          }
+        } else {
+          const result = await syncAreaPath(supabase, organization, project, areaPath, azureHeaders);
+          results.push(result);
+        }
       } catch (err) {
         console.error(`Error syncing area path ${areaPath}:`, err);
         results.push({ areaPath, synced: 0, error: String(err) });
@@ -119,28 +139,33 @@ async function syncAreaPath(
   organization: string,
   project: string,
   areaPath: string,
-  azureHeaders: Record<string, string>
+  azureHeaders: Record<string, string>,
+  specificIteration?: IterationInfo
 ): Promise<SyncResult> {
   const teamAzureBase = `https://dev.azure.com/${organization}/${project}/${encodeURIComponent(areaPath)}`;
   const azureBase = `https://dev.azure.com/${organization}/${project}`;
 
-  // 1. Fetch current iteration — try team-level first, then project-level fallback
-  let currentIteration = await fetchCurrentIteration(teamAzureBase, azureHeaders);
-  let useProjectLevel = false;
+  let currentIteration: IterationInfo | null = specificIteration || null;
+  let useProjectLevel = !!specificIteration;
 
-  if (!currentIteration) {
-    console.log(`[${areaPath}] Team-level iteration failed, trying project-level fallback`);
-    currentIteration = await fetchCurrentIteration(azureBase, azureHeaders);
-    useProjectLevel = true;
-  }
+  if (!specificIteration) {
+    // 1. Fetch current iteration — try team-level first, then project-level fallback
+    currentIteration = await fetchCurrentIteration(teamAzureBase, azureHeaders);
 
-  // If still no current iteration (or stale), try Classification Nodes API
-  if (!currentIteration || !isIterationCurrent(currentIteration)) {
-    console.log(`[${areaPath}] Trying Classification Nodes API fallback`);
-    const cnIteration = await findIterationByClassificationNodes(azureBase, azureHeaders);
-    if (cnIteration) {
-      currentIteration = cnIteration;
+    if (!currentIteration) {
+      console.log(`[${areaPath}] Team-level iteration failed, trying project-level fallback`);
+      currentIteration = await fetchCurrentIteration(azureBase, azureHeaders);
       useProjectLevel = true;
+    }
+
+    // If still no current iteration (or stale), try Classification Nodes API
+    if (!currentIteration || !isIterationCurrent(currentIteration)) {
+      console.log(`[${areaPath}] Trying Classification Nodes API fallback`);
+      const cnIteration = await findIterationByClassificationNodes(azureBase, azureHeaders);
+      if (cnIteration) {
+        currentIteration = cnIteration;
+        useProjectLevel = true;
+      }
     }
   }
   console.log(`[${areaPath}] Current iteration:`, JSON.stringify(currentIteration));
@@ -346,26 +371,7 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
   }
 
   const currentIterPath = workItems.length > 0 ? workItems[0].fields["System.IterationPath"] : null;
-  if (currentIterPath) {
-    const { data: staleSprints } = await supabase
-      .from("sprints")
-      .select("id")
-      .eq("squad_id", squadId)
-      .neq("azure_iteration_path", currentIterPath);
-
-    if (staleSprints && staleSprints.length > 0) {
-      const staleIds = staleSprints.map((s: any) => s.id);
-      for (const sid of staleIds) {
-        await supabase.from("work_items").delete().eq("sprint_id", sid);
-        await supabase.from("metrics_snapshot").delete().eq("sprint_id", sid);
-        await supabase.from("sprint_progress_daily").delete().eq("sprint_id", sid);
-      }
-      for (const sid of staleIds) {
-        await supabase.from("sprints").delete().eq("id", sid);
-      }
-      console.log(`[${areaPath}] Cleaned up ${staleIds.length} stale sprints`);
-    }
-  }
+  // NOTE: Stale sprint cleanup removed to preserve historical data
 
   let startDate: string;
   let endDate: string;
@@ -381,7 +387,10 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
   const iterPath = currentIterPath || "Unknown";
   const sprintName = currentIteration?.name || iterPath.split("\\").pop() || iterPath;
 
-  let { data: sprint } = await supabase.from("sprints").select("id").eq("azure_iteration_path", iterPath).eq("squad_id", squadId).single();
+  const todayStr = new Date().toISOString().split("T")[0];
+  const isClosed = endDate < todayStr;
+
+  let { data: sprint } = await supabase.from("sprints").select("id, end_date").eq("azure_iteration_path", iterPath).eq("squad_id", squadId).single();
 
   if (!sprint) {
     const { data: newSprint } = await supabase.from("sprints").insert({
@@ -390,13 +399,11 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
       azure_iteration_path: iterPath,
       start_date: startDate,
       end_date: endDate,
-      is_closed: false,
+      is_closed: isClosed,
     }).select().single();
     sprint = newSprint;
   } else {
-    if (currentIteration?.startDate) {
-      await supabase.from("sprints").update({ start_date: startDate, end_date: endDate, name: sprintName }).eq("id", sprint.id);
-    }
+    await supabase.from("sprints").update({ start_date: startDate, end_date: endDate, name: sprintName, is_closed: isClosed }).eq("id", sprint.id);
   }
 
   if (!sprint) {
@@ -574,5 +581,48 @@ async function backfillDailyProgress(
     console.log(`[backfill] Done upserting ${rows.length} rows for sprint ${sprintId}`);
   } catch (err) {
     console.error("[backfill] Error:", err);
+  }
+}
+
+async function findAllIterations2026(azureBase: string, headers: Record<string, string>): Promise<IterationInfo[]> {
+  try {
+    const url = `${azureBase}/_apis/wit/classificationnodes/Iterations?$depth=10&api-version=7.0`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      console.warn(`[findAllIterations2026] Failed: ${res.status}`);
+      return [];
+    }
+    const data = await res.json();
+    const results: IterationInfo[] = [];
+    collectIterations2026(data, results);
+    // Sort by start date
+    results.sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
+    console.log(`[findAllIterations2026] Found ${results.length} iterations for 2026`);
+    return results;
+  } catch (err) {
+    console.error("[findAllIterations2026] Error:", err);
+    return [];
+  }
+}
+
+function collectIterations2026(node: any, results: IterationInfo[]): void {
+  if (node.attributes?.startDate) {
+    const name = node.name || "";
+    const startYear = node.attributes.startDate?.split("-")[0];
+    if (startYear === "2026" || name.includes("2026")) {
+      const rawPath = node.path || "";
+      const cleanPath = rawPath.replace(/\\Iteration\\/, "\\").replace(/\\Iteration$/, "").replace(/^\\/, "");
+      results.push({
+        name: node.name,
+        path: cleanPath || node.name,
+        startDate: node.attributes.startDate,
+        endDate: node.attributes.finishDate || null,
+      });
+    }
+  }
+  if (node.children) {
+    for (const child of node.children) {
+      collectIterations2026(child, results);
+    }
   }
 }

@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { RefreshCw, Save, Eye, EyeOff, Plus, X, FolderTree } from "lucide-react";
+import { RefreshCw, Save, Eye, EyeOff, Plus, X, FolderTree, History } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -168,7 +168,7 @@ const Settings = () => {
     }
   };
 
-  const handleSync = async () => {
+  const handleSync = async (syncAllIterations = false) => {
     if (areaPaths.length === 0) {
       toast({ title: "Nenhum Area Path", description: "Adicione pelo menos um Area Path para sincronizar.", variant: "destructive" });
       return;
@@ -189,7 +189,7 @@ const Settings = () => {
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 60000);
+        const timeoutId = setTimeout(() => controller.abort(), 300000);
 
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/azure-sync`,
@@ -200,7 +200,7 @@ const Settings = () => {
               Authorization: `Bearer ${session?.access_token ?? ""}`,
               apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
             },
-            body: JSON.stringify({ areaPaths: [path] }),
+            body: JSON.stringify({ areaPaths: [path], syncAllIterations }),
             signal: controller.signal,
           }
         );
@@ -360,10 +360,16 @@ const Settings = () => {
               )}
             </div>
 
-            <Button variant="outline" onClick={handleSync} disabled={isSyncing || areaPaths.length === 0}>
-              <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
-              {isSyncing ? "Sincronizando..." : `Sincronizar ${areaPaths.length} Time(s)`}
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => handleSync(false)} disabled={isSyncing || areaPaths.length === 0}>
+                <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+                {isSyncing ? "Sincronizando..." : `Sincronizar ${areaPaths.length} Time(s)`}
+              </Button>
+              <Button variant="secondary" onClick={() => handleSync(true)} disabled={isSyncing || areaPaths.length === 0}>
+                <History className={`mr-2 h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+                Carregar Histórico 2026
+              </Button>
+            </div>
 
             {syncProgress && (
               <div className="space-y-2 mt-2">
