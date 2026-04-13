@@ -273,6 +273,7 @@ export type Database = {
           is_spillover: boolean | null
           original_estimate: number | null
           parent_id: number | null
+          pk: string
           remaining_work: number | null
           sprint_id: string
           squad_id: string
@@ -290,6 +291,7 @@ export type Database = {
           is_spillover?: boolean | null
           original_estimate?: number | null
           parent_id?: number | null
+          pk?: string
           remaining_work?: number | null
           sprint_id: string
           squad_id: string
@@ -307,6 +309,7 @@ export type Database = {
           is_spillover?: boolean | null
           original_estimate?: number | null
           parent_id?: number | null
+          pk?: string
           remaining_work?: number | null
           sprint_id?: string
           squad_id?: string
