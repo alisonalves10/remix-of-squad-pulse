@@ -301,38 +301,41 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
     totalSynced++;
   }
 
-  // --- Populate sprint_progress_daily for today ---
-  const chartTypes = ["Task", "Issue", "Bug", "Speed"];
-  const chartItems = workItems.filter(wi => chartTypes.includes(wi.fields["System.WorkItemType"] || ""));
-  const todayRemaining = chartItems.reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.RemainingWork"] || 0), 0);
-  const todayCompleted = chartItems.reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.CompletedWork"] || 0), 0);
-  const todayScope = chartItems.reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.OriginalEstimate"] || 0), 0);
-  // Clamp snapshot date to sprint end_date to avoid data outside the chart range
+  // --- Populate sprint_progress_daily for today (skip if sprint already ended) ---
   const todayRaw = new Date().toISOString().split("T")[0];
   const sprintEndStr = sprint.end_date;
-  const todayStr = todayRaw > sprintEndStr ? sprintEndStr : todayRaw;
 
-  const { data: existingProgress } = await supabase
-    .from("sprint_progress_daily")
-    .select("id")
-    .eq("sprint_id", sprint.id)
-    .eq("date", todayStr)
-    .single();
+  if (todayRaw <= sprintEndStr) {
+    const chartTypes = ["Task", "Issue", "Bug", "Speed"];
+    const chartItems = workItems.filter(wi => chartTypes.includes(wi.fields["System.WorkItemType"] || ""));
+    const todayRemaining = chartItems.reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.RemainingWork"] || 0), 0);
+    const todayCompleted = chartItems.reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.CompletedWork"] || 0), 0);
+    const todayScope = chartItems.reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.OriginalEstimate"] || 0), 0);
 
-  const progressPayload = {
-    sprint_id: sprint.id,
-    date: todayStr,
-    remaining_points: todayRemaining,
-    completed_points: todayCompleted,
-    total_scope_points: todayScope,
-  };
+    const { data: existingProgress } = await supabase
+      .from("sprint_progress_daily")
+      .select("id")
+      .eq("sprint_id", sprint.id)
+      .eq("date", todayRaw)
+      .single();
 
-  if (existingProgress) {
-    await supabase.from("sprint_progress_daily").update(progressPayload).eq("id", existingProgress.id);
+    const progressPayload = {
+      sprint_id: sprint.id,
+      date: todayRaw,
+      remaining_points: todayRemaining,
+      completed_points: todayCompleted,
+      total_scope_points: todayScope,
+    };
+
+    if (existingProgress) {
+      await supabase.from("sprint_progress_daily").update(progressPayload).eq("id", existingProgress.id);
+    } else {
+      await supabase.from("sprint_progress_daily").insert(progressPayload);
+    }
+    console.log(`[${areaPath}] sprint_progress_daily updated for ${todayRaw}: remaining=${todayRemaining}, completed=${todayCompleted}, scope=${todayScope}`);
   } else {
-    await supabase.from("sprint_progress_daily").insert(progressPayload);
+    console.log(`[${areaPath}] Sprint ended on ${sprintEndStr}, skipping daily progress for ${todayRaw}`);
   }
-  console.log(`[${areaPath}] sprint_progress_daily updated for ${todayStr}: remaining=${todayRemaining}, completed=${todayCompleted}, scope=${todayScope}`);
 
   // --- Metrics snapshot ---
   const planned = workItems.reduce((s, wi) => s + (wi.fields["Microsoft.VSTS.Scheduling.StoryPoints"] || 0), 0);
