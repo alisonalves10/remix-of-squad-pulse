@@ -1,16 +1,21 @@
 
 
-# Add "B2B e Instalação" Area Path and Sync
+# Botão de re-sincronização manual na tela de Sprint
 
-## Steps
+## O que será feito
 
-1. **Update azure_config** — Add `"B2B e Instalação"` to the `area_paths` array in the existing config record (ID: `707ddbb3-...`). This will be done via a database migration since we need an UPDATE.
+Adicionar um botão "Sincronizar" na barra de ações da tela de detalhes da sprint (ao lado dos botões de exportação e do seletor de sprint). Ao clicar, o sistema chamará a edge function `azure-sync` passando o Area Path da squad atual, forçando a atualização dos dados históricos de burndown/burnup. Mostrará feedback via toast (sucesso/erro) e invalidará o cache do TanStack Query para recarregar os gráficos automaticamente.
 
-2. **Trigger sync** — Call the `azure-sync` edge function with `areaPaths: ["B2B e Instalação"]` to import work items, sprints, and historical daily progress for this new squad.
+## Alterações
 
-3. **Verify** — Query the database to confirm the new squad was created and data was imported correctly.
+**`src/pages/Sprints.tsx`**
+- Importar `Button`, `RefreshCw` (lucide), `supabase` client, `useQueryClient`, `toast`
+- Adicionar estado `isSyncing`
+- Criar função `handleResync` que:
+  1. Chama `supabase.functions.invoke("azure-sync", { body: { areaPaths: [sprint.squadName] } })`
+  2. Mostra toast de sucesso/erro
+  3. Invalida queries do TanStack Query para recarregar dados
+- Inserir o botão com ícone `RefreshCw` (animação de spin durante loading) na `actions` area, ao lado de `ExportButtons`
 
-## Technical detail
-- Migration SQL: `UPDATE azure_config SET area_paths = array_append(area_paths, 'B2B e Instalação') WHERE id = '707ddbb3-3556-411f-a260-53fb9b7e3baa';`
-- The edge function will automatically create the squad, find active sprints, sync work items, and backfill historical burndown data.
+Nenhuma alteração de backend necessária — a edge function já aceita `areaPaths` no body.
 
