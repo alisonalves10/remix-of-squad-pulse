@@ -15,6 +15,7 @@ const Settings = () => {
   const { toast } = useToast();
   const [showPat, setShowPat] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<{ current: number; total: number; currentPath: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [configId, setConfigId] = useState<string | null>(null);
 
@@ -140,54 +141,62 @@ const Settings = () => {
     await handleSaveConfig();
 
     setIsSyncing(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 300000);
+    setSyncProgress({ current: 0, total: areaPaths.length, currentPath: "" });
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/azure-sync`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session?.access_token ?? ""}`,
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-          body: JSON.stringify({ areaPaths }),
-          signal: controller.signal,
+    const allResults: any[] = [];
+    const { data: { session } } = await supabase.auth.getSession();
+
+    for (let i = 0; i < areaPaths.length; i++) {
+      const path = areaPaths[i];
+      setSyncProgress({ current: i + 1, total: areaPaths.length, currentPath: path });
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/azure-sync`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session?.access_token ?? ""}`,
+              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            },
+            body: JSON.stringify({ areaPaths: [path] }),
+            signal: controller.signal,
+          }
+        );
+        clearTimeout(timeoutId);
+
+        const data = await response.json();
+        if (data?.results) {
+          allResults.push(...data.results);
+        } else if (data?.error) {
+          allResults.push({ areaPath: path, synced: 0, error: data.error });
         }
-      );
-      clearTimeout(timeoutId);
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        toast({ title: "Erro na sincronização", description: data?.error || response.statusText, variant: "destructive" });
-      } else if (data?.error) {
-        toast({ title: "Erro na sincronização", description: data.error, variant: "destructive" });
-      } else if (data?.results) {
-        const totalSynced = data.results.reduce((sum: number, r: any) => sum + (r.synced || 0), 0);
-        const errors = data.results.filter((r: any) => r.error);
-        const successful = data.results.filter((r: any) => !r.error);
-
-        let description = `${totalSynced} work items sincronizados em ${successful.length} time(s).`;
-        if (errors.length > 0) {
-          description += ` ${errors.length} erro(s): ${errors.map((e: any) => `${e.areaPath}: ${e.error}`).join("; ")}`;
-        }
-
-        toast({
-          title: errors.length > 0 ? "Sincronização parcial" : "Sincronização concluída!",
-          description,
-          variant: errors.length > 0 ? "destructive" : "default",
-        });
-      } else {
-        toast({ title: "Sincronização concluída!", description: `${data?.synced || 0} work items sincronizados.` });
+      } catch (err: any) {
+        const msg = err.name === "AbortError" ? "Timeout" : err.message;
+        allResults.push({ areaPath: path, synced: 0, error: msg });
       }
-    } catch (err: any) {
-      const msg = err.name === "AbortError" ? "Timeout: a sincronização demorou mais de 5 minutos." : err.message;
-      toast({ title: "Erro", description: msg, variant: "destructive" });
     }
+
+    const totalSynced = allResults.reduce((sum: number, r: any) => sum + (r.synced || 0), 0);
+    const errors = allResults.filter((r: any) => r.error);
+    const successful = allResults.filter((r: any) => !r.error);
+
+    let description = `${totalSynced} work items sincronizados em ${successful.length} time(s).`;
+    if (errors.length > 0) {
+      description += ` ${errors.length} erro(s): ${errors.map((e: any) => `${e.areaPath}: ${e.error}`).join("; ")}`;
+    }
+
+    toast({
+      title: errors.length > 0 ? "Sincronização parcial" : "Sincronização concluída!",
+      description,
+      variant: errors.length > 0 ? "destructive" : "default",
+    });
+
+    setSyncProgress(null);
     setIsSyncing(false);
   };
 
@@ -318,6 +327,25 @@ const Settings = () => {
               <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
               {isSyncing ? "Sincronizando..." : `Sincronizar ${areaPaths.length} Time(s)`}
             </Button>
+
+            {syncProgress && (
+              <div className="space-y-2 mt-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    Sincronizando <strong>{syncProgress.currentPath}</strong>
+                  </span>
+                  <span className="text-muted-foreground font-medium">
+                    {syncProgress.current}/{syncProgress.total}
+                  </span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                  <div
+                    className="bg-primary h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${(syncProgress.current / syncProgress.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
