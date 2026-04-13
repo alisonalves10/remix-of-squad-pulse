@@ -293,7 +293,7 @@ function findNodeByDate(node: any, today: string): IterationInfo | null {
     const end = node.attributes.finishDate?.split("T")[0];
     if (start && end && start <= today && today <= end) {
       const rawPath = node.path || "";
-      const cleanPath = rawPath.replace(/\\Iteration\\/, "\\").replace(/\\Iteration$/, "");
+      const cleanPath = rawPath.replace(/\\Iteration\\/, "\\").replace(/\\Iteration$/, "").replace(/^\\/, "");
       return {
         name: node.name,
         path: cleanPath || node.name,
