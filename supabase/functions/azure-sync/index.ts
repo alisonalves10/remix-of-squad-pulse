@@ -583,3 +583,46 @@ async function backfillDailyProgress(
     console.error("[backfill] Error:", err);
   }
 }
+
+async function findAllIterations2026(azureBase: string, headers: Record<string, string>): Promise<IterationInfo[]> {
+  try {
+    const url = `${azureBase}/_apis/wit/classificationnodes/Iterations?$depth=10&api-version=7.0`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      console.warn(`[findAllIterations2026] Failed: ${res.status}`);
+      return [];
+    }
+    const data = await res.json();
+    const results: IterationInfo[] = [];
+    collectIterations2026(data, results);
+    // Sort by start date
+    results.sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
+    console.log(`[findAllIterations2026] Found ${results.length} iterations for 2026`);
+    return results;
+  } catch (err) {
+    console.error("[findAllIterations2026] Error:", err);
+    return [];
+  }
+}
+
+function collectIterations2026(node: any, results: IterationInfo[]): void {
+  if (node.attributes?.startDate) {
+    const name = node.name || "";
+    const startYear = node.attributes.startDate?.split("-")[0];
+    if (startYear === "2026" || name.includes("2026")) {
+      const rawPath = node.path || "";
+      const cleanPath = rawPath.replace(/\\Iteration\\/, "\\").replace(/\\Iteration$/, "").replace(/^\\/, "");
+      results.push({
+        name: node.name,
+        path: cleanPath || node.name,
+        startDate: node.attributes.startDate,
+        endDate: node.attributes.finishDate || null,
+      });
+    }
+  }
+  if (node.children) {
+    for (const child of node.children) {
+      collectIterations2026(child, results);
+    }
+  }
+}
