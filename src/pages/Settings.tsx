@@ -181,13 +181,15 @@ const Settings = () => {
     setSyncProgress({ current: 0, total: areaPaths.length, currentPath: "" });
 
     const allResults: any[] = [];
-    const { data: { session } } = await supabase.auth.getSession();
 
     for (let i = 0; i < areaPaths.length; i++) {
       const path = areaPaths[i];
       setSyncProgress({ current: i + 1, total: areaPaths.length, currentPath: path });
 
       try {
+        // Refresh token before each call to prevent expiration during long syncs
+        const { data: { session: freshSession } } = await supabase.auth.getSession();
+
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 300000);
 
@@ -197,7 +199,7 @@ const Settings = () => {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${session?.access_token ?? ""}`,
+              Authorization: `Bearer ${freshSession?.access_token ?? ""}`,
               apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
             },
             body: JSON.stringify({ areaPaths: [path], syncAllIterations }),
