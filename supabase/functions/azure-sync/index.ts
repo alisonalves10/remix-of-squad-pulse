@@ -195,24 +195,23 @@ async function fetchWorkItemDetails(azureBase: string, headers: Record<string, s
 }
 
 async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: string, project: string, areaPath: string, currentIteration: IterationInfo | null, azureHeaders: Record<string, string>): Promise<SyncResult> {
-  const squadName = areaPath;
-  const { data: squadData } = await supabase
-    .from("squads")
-    .upsert({ name: squadName, description: `Area Path: ${project}\\${areaPath}`, azure_team_id: areaPath }, { onConflict: "name" })
-    .select()
-    .single();
+  const squadName = areaPath.trim();
 
+  // Case-insensitive lookup to avoid duplicate squads
   let squadId: string;
-  if (squadData) {
-    squadId = squadData.id;
+  const { data: existingSquad } = await supabase
+    .from("squads")
+    .select("id, name")
+    .ilike("name", squadName)
+    .maybeSingle();
+
+  if (existingSquad) {
+    squadId = existingSquad.id;
+    // Update description/azure_team_id if needed
+    await supabase.from("squads").update({ description: `Area Path: ${project}\\${areaPath}`, azure_team_id: areaPath }).eq("id", squadId);
   } else {
-    const { data: existing } = await supabase.from("squads").select("id").eq("name", squadName).single();
-    if (existing) {
-      squadId = existing.id;
-    } else {
-      const { data: newSquad } = await supabase.from("squads").insert({ name: squadName, description: `Area Path: ${project}\\${areaPath}`, azure_team_id: areaPath }).select().single();
-      squadId = newSquad.id;
-    }
+    const { data: newSquad } = await supabase.from("squads").insert({ name: squadName, description: `Area Path: ${project}\\${areaPath}`, azure_team_id: areaPath }).select().single();
+    squadId = newSquad.id;
   }
 
   const currentIterPath = workItems.length > 0 ? workItems[0].fields["System.IterationPath"] : null;
