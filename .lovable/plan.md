@@ -1,27 +1,26 @@
 
 
-# Gráfico "Itens por Sprint" com Planejado vs Concluído
-
-## Objetivo
-Transformar o gráfico de barras simples "Itens por Sprint" em um gráfico com duas barras por sprint: **Planejado** (total de itens atribuídos) e **Concluído** (itens com estado Done/Closed), mostrando a performance real do profissional.
+# Profissionais: só nome no select + edição de atribuição
 
 ## Mudanças
 
-### `src/pages/Professionals.tsx`
-- Alterar o `itemsBySprintData` para calcular dois valores por sprint:
-  - `planned`: contagem total de itens na sprint
-  - `completed`: contagem de itens com estado "Done" ou "Closed"
-- Substituir o `VelocityChart` do "Itens por Sprint" por um gráfico customizado com duas barras (Recharts `BarChart` com dois `Bar`: um azul para Planejado, um verde para Concluído) e uma `Legend`
+### 1. Select de profissional — mostrar só o nome
+**Arquivo:** `src/pages/Professionals.tsx` (linha 177)
+- Remover `{u.role ? \`- ${u.role}\` : ""}` do `SelectItem`, exibindo apenas `{u.name}`
 
-### `src/components/dashboard/VelocityChart.tsx`
-- Não será alterado — o gráfico de "Horas por Sprint" continua usando o componente existente
-- O novo gráfico de "Itens por Sprint" será implementado inline na página Professionals (ou como um novo componente) com suporte a duas séries de dados
+### 2. Card do profissional — adicionar edição de atribuição (role)
+**Arquivo:** `src/pages/Professionals.tsx` (linhas 222-237)
+- No card de info do profissional (abaixo dos filtros), adicionar um campo editável para a atribuição/cargo
+- Implementar como um input inline ou um select com opções comuns (ex: Desenvolvedor, QA, Tech Lead, Product Owner, Designer, Scrum Master) + opção de texto livre
+- Ao alterar, fazer `UPDATE` na tabela `users` no campo `role` via Supabase
+- Mostrar toast de confirmação ao salvar
 
-## Visual
-- Barra azul (primary) = Planejado
-- Barra verde (success) = Concluído
-- Legenda embaixo do gráfico
+### Detalhes técnicos
+- Usar um `Select` do shadcn com opções pré-definidas de cargos + opção "Outro" com input de texto
+- Chamar `supabase.from("users").update({ role }).eq("id", userId)` ao confirmar
+- Invalidar a query `["users"]` após salvar para atualizar o select e o card
+- Importar `useQueryClient` do TanStack para invalidação
 
 ## Arquivos alterados
-- `src/pages/Professionals.tsx` — novo cálculo de dados e gráfico de barras duplas
+- `src/pages/Professionals.tsx` — remover role do select, adicionar edição de atribuição no card
 
