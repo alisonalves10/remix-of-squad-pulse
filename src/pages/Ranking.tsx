@@ -21,14 +21,23 @@ const Ranking = () => {
 
   const [squadFilter, setSquadFilter] = useState("all");
   const [sprintFilter, setSprintFilter] = useState("all");
+  const [roleFilter, setRoleFilter] = useState("all");
   const [sortBy, setSortBy] = useState<SortKey>("totalHours");
 
   const { data: rankings, isLoading } = useRankingData(squadFilter, sprintFilter);
 
+  const uniqueRoles = useMemo(() => {
+    if (!rankings) return [];
+    const roles = rankings.map(r => r.userRole).filter(Boolean) as string[];
+    return [...new Set(roles)].sort();
+  }, [rankings]);
+
   const sorted = useMemo(() => {
     if (!rankings) return [];
-    return [...rankings].sort((a, b) => b[sortBy] - a[sortBy]);
-  }, [rankings, sortBy]);
+    return [...rankings]
+      .filter(r => roleFilter === "all" || r.userRole === roleFilter)
+      .sort((a, b) => b[sortBy] - a[sortBy]);
+  }, [rankings, sortBy, roleFilter]);
 
   const chartData = useMemo(() => {
     return sorted.slice(0, 15).map(r => ({
@@ -121,6 +130,20 @@ const Ranking = () => {
                     <SelectItem value="all">Todas as sprints</SelectItem>
                     {availableSprints.map(s => (
                       <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="w-full md:w-[220px]">
+                <label className="text-sm font-medium text-muted-foreground mb-2 block">Atribuição</label>
+                <Select value={roleFilter} onValueChange={setRoleFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todas as atribuições" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as atribuições</SelectItem>
+                    {uniqueRoles.map(role => (
+                      <SelectItem key={role} value={role}>{role}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
