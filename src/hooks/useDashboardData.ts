@@ -42,10 +42,11 @@ export function useDashboardData(selectedSquadId?: string | null, selectedSprint
           const match = sprints.find(s => s.squad_id === squad.id && s.name === selectedSprintName);
           if (match) targetSprintBySquad.set(squad.id, match.id);
         } else {
-          // Use latest closed sprint (fallback to latest)
-          const closedSprints = sprints.filter(s => s.squad_id === squad.id && s.is_closed);
+          // Use latest finished sprint (end_date < today), fallback to latest
+          const today = new Date().toISOString().split("T")[0];
+          const finishedSprints = sprints.filter(s => s.squad_id === squad.id && s.end_date < today);
           const fallback = sprints.filter(s => s.squad_id === squad.id);
-          const best = closedSprints.length > 0 ? closedSprints[closedSprints.length - 1] : fallback[fallback.length - 1];
+          const best = finishedSprints.length > 0 ? finishedSprints[finishedSprints.length - 1] : fallback[fallback.length - 1];
           if (best) targetSprintBySquad.set(squad.id, best.id);
         }
       }
