@@ -435,7 +435,16 @@ const SprintDetail = () => {
                     <TableRow key={item.id}>
                       <TableCell className="font-mono text-sm">{item.id}</TableCell>
                       <TableCell>{getTypeBadge(item.type)}</TableCell>
-                       <TableCell className="max-w-[300px] truncate">{item.title}</TableCell>
+                       <TableCell className="max-w-[300px]">
+                         <div className="flex items-center gap-2">
+                           <span className="truncate">{item.title}</span>
+                           {item.is_spillover && (
+                             <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-orange-400 text-orange-600 dark:text-orange-400 whitespace-nowrap shrink-0">
+                               Spillover
+                             </Badge>
+                           )}
+                         </div>
+                       </TableCell>
                        <TableCell className="text-sm font-mono text-muted-foreground">
                          {item.parent_id ? `#${item.parent_id}` : "—"}
                         </TableCell>

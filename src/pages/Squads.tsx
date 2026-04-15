@@ -63,9 +63,10 @@ const Squads = () => {
   }, [workItems, currentSprint]);
 
   // Filter work items to selected sprint for table
+  const excludedTypes = ["Epic", "Feature"];
   const tableWorkItems = useMemo(() => {
     if (!workItems || !activeWorkItemsSprintId) return [];
-    return workItems.filter(wi => wi.sprint_id === activeWorkItemsSprintId);
+    return workItems.filter(wi => wi.sprint_id === activeWorkItemsSprintId && !excludedTypes.includes(wi.type));
   }, [workItems, activeWorkItemsSprintId]);
 
   // Compute KPIs from current sprint work items
