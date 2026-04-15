@@ -14,7 +14,8 @@ import { useState } from "react";
 const Index = () => {
   const { exportToPDF, exportToExcel } = useExport();
   const [selectedSquadId, setSelectedSquadId] = useState<string | null>(null);
-  const { data, isLoading } = useDashboardData(selectedSquadId);
+  const [selectedSprintName, setSelectedSprintName] = useState<string | null>(null);
+  const { data, isLoading } = useDashboardData(selectedSquadId, selectedSprintName);
 
   const {
     totalSquads = 0,
@@ -29,6 +30,7 @@ const Index = () => {
     velocityTrend = [],
     squadTableData = [],
     allSquads = [],
+    allSprintNames = [],
   } = data ?? {};
 
   const exportConfig = {
@@ -84,6 +86,20 @@ const Index = () => {
               <SelectItem value="all">Todas as Squads</SelectItem>
               {allSquads.map((squad) => (
                 <SelectItem key={squad.id} value={squad.id}>{squad.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={selectedSprintName ?? "latest"}
+            onValueChange={(val) => setSelectedSprintName(val === "latest" ? null : val)}
+          >
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Filtrar por sprint" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="latest">Última Sprint Fechada</SelectItem>
+              {allSprintNames.map((name) => (
+                <SelectItem key={name} value={name}>{name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
