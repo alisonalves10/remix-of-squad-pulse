@@ -21,7 +21,10 @@ const Index = () => {
     avgVelocity = 0,
     avgCommitment = 0,
     avgSpillover = 0,
-    bugRate = 0,
+    globalBugsCreated = 0,
+    globalBugsResolved = 0,
+    bugResolutionRate = 0,
+    completionRate = 0,
     velocityBySquad = [],
     velocityTrend = [],
     squadTableData = [],
@@ -93,7 +96,7 @@ const Index = () => {
           <KPICard
             title="Squads Monitoradas"
             value={totalSquads}
-            subtitle="Equipes ativas"
+            subtitle={`${completionRate}% entregue`}
             icon={Users}
             variant="default"
           />
@@ -119,11 +122,11 @@ const Index = () => {
             variant={avgSpillover <= 15 ? "success" : "warning"}
           />
           <KPICard
-            title="Taxa de Bugs"
-            value={`${bugRate}%`}
-            subtitle="Criados x resolvidos"
+            title="Bugs"
+            value={`${globalBugsCreated}/${globalBugsResolved}`}
+            subtitle={globalBugsCreated === 0 ? "Nenhum bug na sprint" : `${bugResolutionRate}% resolvidos`}
             icon={Bug}
-            variant={bugRate <= 15 ? "success" : "danger"}
+            variant={globalBugsCreated === 0 ? "success" : globalBugsResolved >= globalBugsCreated ? "success" : "danger"}
           />
         </div>
 
