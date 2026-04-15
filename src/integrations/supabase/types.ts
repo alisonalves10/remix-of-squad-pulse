@@ -265,6 +265,7 @@ export type Database = {
       }
       work_items: {
         Row: {
+          area_path: string | null
           assigned_to_user_id: string | null
           completed_at: string | null
           completed_work: number | null
@@ -283,6 +284,7 @@ export type Database = {
           type: string
         }
         Insert: {
+          area_path?: string | null
           assigned_to_user_id?: string | null
           completed_at?: string | null
           completed_work?: number | null
@@ -301,6 +303,7 @@ export type Database = {
           type: string
         }
         Update: {
+          area_path?: string | null
           assigned_to_user_id?: string | null
           completed_at?: string | null
           completed_work?: number | null

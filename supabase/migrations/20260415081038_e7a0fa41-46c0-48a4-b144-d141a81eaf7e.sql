@@ -1,0 +1,1 @@
+ALTER TABLE public.work_items ADD COLUMN area_path text;
