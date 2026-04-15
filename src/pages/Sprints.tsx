@@ -239,7 +239,7 @@ const SprintDetail = () => {
             <SelectContent>
               {squadSprints.map((s) => (
                 <SelectItem key={s.id} value={s.id}>
-                  {s.name} {s.is_closed ? "(Fechada)" : ""}
+                  {s.name} {isSprintActiveFn(s) ? "(Em andamento)" : ""}
                 </SelectItem>
               ))}
             </SelectContent>
