@@ -84,10 +84,13 @@ const Professionals = () => {
 
   // Charts data
   const hoursBySprintData = useMemo(() => {
-    const map = new Map<string, { name: string; velocity: number; start_date: string }>();
+    const map = new Map<string, { name: string; planned: number; completed: number; start_date: string }>();
     squadFilteredItems.forEach(wi => {
-      const existing = map.get(wi.sprint_id) || { name: wi.sprint_name, velocity: 0, start_date: wi.sprint_start_date };
-      existing.velocity += wi.completed_work || 0;
+      const existing = map.get(wi.sprint_id) || { name: wi.sprint_name, planned: 0, completed: 0, start_date: wi.sprint_start_date };
+      existing.planned += wi.completed_work || 0;
+      if (["Done", "Closed"].includes(wi.state)) {
+        existing.completed += wi.completed_work || 0;
+      }
       map.set(wi.sprint_id, existing);
     });
     return Array.from(map.values()).sort((a, b) => a.start_date.localeCompare(b.start_date));
@@ -244,7 +247,25 @@ const Professionals = () => {
 
             {/* Charts */}
             <div className="grid gap-6 lg:grid-cols-2">
-              <VelocityChart data={hoursBySprintData} title="Horas por Sprint" description="Horas lançadas em cada sprint" />
+              <Card className="shadow-card">
+                <CardHeader>
+                  <CardTitle className="text-lg">Horas por Sprint</CardTitle>
+                  <CardDescription>Planejado vs Concluído em horas</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={hoursBySprintData}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis dataKey="name" tick={{ fontSize: 12 }} className="text-muted-foreground" />
+                      <YAxis tick={{ fontSize: 12 }} className="text-muted-foreground" />
+                      <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }} />
+                      <Legend />
+                      <Bar dataKey="planned" name="Planejado" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="completed" name="Concluído" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
               <Card className="shadow-card">
                 <CardHeader>
                   <CardTitle className="text-lg">Itens por Sprint</CardTitle>
