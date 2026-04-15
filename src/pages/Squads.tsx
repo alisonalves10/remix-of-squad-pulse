@@ -44,6 +44,41 @@ const Squads = () => {
     return getCurrentSprint(sprints) || sprints[0];
   }, [sprints]);
 
+  // Fetch burndown data for current sprint
+  const { data: progressDaily } = useQuery({
+    queryKey: ["sprint_progress_daily", currentSprint?.id],
+    queryFn: async () => {
+      if (!currentSprint) return [];
+      const { data, error } = await supabase
+        .from("sprint_progress_daily")
+        .select("*")
+        .eq("sprint_id", currentSprint.id)
+        .order("date");
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!currentSprint?.id,
+  });
+
+  const burndownData = useMemo(() => {
+    if (!currentSprint || !progressDaily || progressDaily.length === 0) return [];
+    const start = parseISO(currentSprint.start_date);
+    const end = parseISO(currentSprint.end_date);
+    const days = eachDayOfInterval({ start, end });
+    const totalScope = progressDaily[0]?.total_scope_points || progressDaily[0]?.remaining_points || 0;
+    const idealDecrement = days.length > 1 ? Number(totalScope) / (days.length - 1) : 0;
+
+    return days.map((day, i) => {
+      const dateStr = format(day, "yyyy-MM-dd");
+      const snapshot = progressDaily.find(p => p.date === dateStr);
+      return {
+        date: format(day, "dd/MM"),
+        remaining: snapshot ? Number(snapshot.remaining_points) : null,
+        ideal: Math.max(0, Number(totalScope) - idealDecrement * i),
+      };
+    });
+  }, [currentSprint, progressDaily]);
+
   const nonFutureSprints = useMemo(() => {
     if (!sprints) return [];
     return sprints.filter(sp => !isSprintFuture(sp));
