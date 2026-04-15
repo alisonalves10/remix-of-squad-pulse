@@ -282,8 +282,8 @@ const Roadmap = () => {
               </DialogContent>
             </Dialog>
             <ExportButtons
-              onExportPDF={() => exportToPDF(filteredItems, "roadmap")}
-              onExportExcel={() => exportToExcel(filteredItems, "roadmap")}
+              onExportPDF={() => exportToPDF({ ...exportConfig, data: filteredItems as any })}
+              onExportExcel={() => exportToExcel({ ...exportConfig, data: filteredItems as any })}
             />
           </div>
         </div>
@@ -293,25 +293,25 @@ const Roadmap = () => {
           <KPICard
             title="Total Investido"
             value={`R$ ${(totalInvested / 1000).toFixed(0)}k`}
-            description="Custo estimado total"
+            subtitle="Custo estimado total"
             icon={DollarSign}
           />
           <KPICard
             title="Em Andamento"
             value={inProgress}
-            description="Iniciativas ativas"
+            subtitle="Iniciativas ativas"
             icon={Rocket}
           />
           <KPICard
             title="Concluídas"
             value={doneCount}
-            description={`de ${filteredItems.length} iniciativas`}
+            subtitle={`de ${filteredItems.length} iniciativas`}
             icon={CheckCircle2}
           />
           <KPICard
             title="Entregue no Prazo"
             value={`${onTimeRate}%`}
-            description="Taxa de pontualidade"
+            subtitle="Taxa de pontualidade"
             icon={AlertTriangle}
           />
         </div>
