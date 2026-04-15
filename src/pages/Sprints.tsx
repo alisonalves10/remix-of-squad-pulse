@@ -133,6 +133,7 @@ const SprintDetail = () => {
     plannedHours,
     completedHours,
     commitment,
+    completionRate,
     types,
     states,
     burndownData,
