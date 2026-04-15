@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { KPICard } from "@/components/dashboard/KPICard";
+import { BurndownChart } from "@/components/dashboard/BurndownChart";
 import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { Link } from "react-router-dom";
 import { ArrowRight, TrendingUp, Target, Package, Bug, Loader2 } from "lucide-react";
@@ -12,8 +13,10 @@ import { useState, useMemo, useEffect } from "react";
 import { useSquads, useSprintsBySquad, useMetricsBySquad, useWorkItemsBySquad } from "@/hooks/useSquadsData";
 import { getCurrentSprint, isSprintActive, isSprintFuture } from "@/lib/sprint-utils";
 import { useExport } from "@/hooks/useExport";
-import { format } from "date-fns";
+import { format, eachDayOfInterval, parseISO } from "date-fns";
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from "recharts";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 const PIE_COLORS = [
   "hsl(var(--primary))",
