@@ -1,48 +1,50 @@
 
 
-# 4 ajustes: gráficos de pizza, sidebar, dashboard KPI, filtro de sprint nos work items
+# Profissionais: dados reais do banco + ajustes de métricas
 
-## 1. Gráficos de pizza — mostrar só valores, aumentar tamanho
+## Resumo
+Substituir todos os dados mock da página Profissionais por dados reais (tabelas `users`, `work_items`, `sprints`, `squads`). Trocar "Story Points" por "Horas" em todos os lugares. Adicionar coluna `area_path` na tabela `work_items`. Adicionar filtro por sprint no topo e trazer histórico do ano inteiro.
 
-**Arquivo:** `src/pages/Squads.tsx` (linhas 190-222)
+## Mudanças no banco de dados
 
-- Trocar `label={({ name, value }) => \`${name}: ${value}\`}` por `label={({ value }) => value}` em ambos os PieCharts
-- Aumentar `outerRadius` de 90 para 110 e `height` de 280 para 320
+### Migration: adicionar `area_path` à tabela `work_items`
+```sql
+ALTER TABLE work_items ADD COLUMN area_path text;
+```
 
-## 2. Indicador de sprint atual na sidebar
+### Atualizar Azure Sync (`supabase/functions/azure-sync/index.ts`)
+- Na inserção de work_items (linha ~508), adicionar `area_path: wi.fields["System.AreaPath"] || null`
 
-**Arquivo:** `src/components/layout/AppSidebar.tsx`
+## Novo hook: `src/hooks/useProfessionalsData.ts`
+- `useProfessionals()` — busca todos os `users` com seus dados
+- `useWorkItemsByUser(userId, year)` — busca work_items filtrados por `assigned_to_user_id` e sprints do ano (2026), com join em sprints para obter nome da sprint. Não trazer sprints futuras.
+- Cálculos de KPIs: total de horas (`SUM(completed_work)`), itens concluídos, bugs resolvidos, média de horas por sprint
 
-- Importar `useSprintsBySquad` ou criar query simples para buscar a sprint ativa (date-based)
-- No `SidebarFooter`, acima do botão "Sair", exibir um badge/texto com o nome da sprint em andamento (ex: "Sprint 8 em andamento" com ícone Calendar)
-- Usar `getCurrentSprint` de `sprint-utils` para determinar qual sprint mostrar
-- Buscar todas as sprints sem filtro de squad e encontrar a ativa
+## Página `src/pages/Professionals.tsx` — reescrever com dados reais
 
-## 3. Dashboard geral — trocar "Velocidade Média" por "Horas Lançadas"
+### Filtros (topo)
+- **Profissional**: Select populado com `users` reais
+- **Sprint**: Select com todas as sprints não-futuras do ano (default "Todas"), filtra a tabela de histórico
+- Manter filtro de Squad opcional
 
-**Arquivo:** `src/pages/Index.tsx` (linhas 119-124)
+### KPIs (4 cards)
+- **Horas Lançadas** (antes "Story Points") — `SUM(completed_work)` dos itens do profissional no ano
+- **Itens Concluídos** — contagem de itens
+- **Bugs Resolvidos** — contagem de itens tipo Bug com estado Done/Closed
+- **Média por Sprint** → "Horas por Sprint" — total horas / número de sprints com atividade
 
-- Trocar título "Velocidade Média" por "Horas Lançadas"
-- Trocar `value={avgVelocity}h` por total de horas (soma, não média)
-- Trocar subtitle "Horas por sprint" por "Total na sprint selecionada"
+### Gráficos
+- **"Horas por Sprint"** (antes "Story Points por Sprint") — bar chart com `completed_work` agrupado por sprint
+- **"Itens por Sprint"** — mantém, agrupado por sprint
 
-**Arquivo:** `src/hooks/useDashboardData.ts`
-
-- Expor `totalVelocity` (já calculado na linha 100, é a soma de `completed` hours) no retorno, renomeado como `totalHoursLogged`
-- Manter `avgVelocity` para não quebrar outros usos, mas adicionar o campo total
-
-## 4. Filtro de sprint manual na tabela de work items
-
-**Arquivo:** `src/pages/Squads.tsx`
-
-- Adicionar estado `selectedWorkItemsSprintId` (default = `currentSprint?.id`)
-- No header do card "Work Items", adicionar um `Select` com as sprints não-futuras da squad
-- Filtrar `workItems` pelo sprint selecionado no select (em vez de fixo no `currentSprint`)
-- Atualizar título e descrição do card para refletir a sprint escolhida
+### Tabela "Histórico de Itens"
+- Trazer todos os itens do ano (sprints de 2026), filtrável pelo select de sprint no topo
+- Colunas: Sprint | ID | Título | Tipo | **Horas** (antes "Points") | **Area Path** (nova) | Estado
+- Ordenar por sprint (mais recente primeiro)
 
 ## Arquivos alterados
-- `src/pages/Squads.tsx` — labels dos pies, tamanho, filtro de sprint nos work items
-- `src/components/layout/AppSidebar.tsx` — indicador de sprint ativa
-- `src/pages/Index.tsx` — trocar KPI "Velocidade Média" por "Horas Lançadas"
-- `src/hooks/useDashboardData.ts` — expor total de horas
+- **Migration SQL** — `area_path` em `work_items`
+- **`supabase/functions/azure-sync/index.ts`** — gravar `area_path`
+- **`src/hooks/useProfessionalsData.ts`** — novo hook com queries reais
+- **`src/pages/Professionals.tsx`** — reescrever com dados reais, trocar SP por horas, filtro de sprint, coluna area_path
 
