@@ -135,6 +135,7 @@ export function useDashboardData(selectedSquadId?: string | null, selectedSprint
       }
 
       const avgVelocity = totalSquads > 0 ? Math.round(totalVelocity / totalSquads) : 0;
+      const totalHoursLogged = totalVelocity;
       const avgCommitment = commitmentCount > 0 ? Math.round(totalCommitment / commitmentCount) : 0;
 
       // Spillover only from target sprints
@@ -163,6 +164,7 @@ export function useDashboardData(selectedSquadId?: string | null, selectedSprint
       return {
         totalSquads,
         avgVelocity,
+        totalHoursLogged,
         avgCommitment,
         avgSpillover,
         globalBugsCreated,
