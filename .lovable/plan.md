@@ -1,30 +1,38 @@
 
 
-# Trazer responsáveis pelas Tasks, Issues, Bugs e Speed
+# Fix: Spillover nunca é detectado (bug na referência do IterationPath)
 
-## Problema
-O campo `assigned_to_user_id` está sempre `null` em todos os work items porque a edge function `azure-sync` não extrai o campo `System.AssignedTo` do Azure DevOps, e a tabela `users` está vazia.
+## Problema identificado
+Na função `syncToDatabase` (linha 395), o `iterPath` usado para detectar spillover vem do **primeiro work item retornado**:
+
+```typescript
+const currentIterPath = workItems[0].fields["System.IterationPath"];
+const iterPath = currentIterPath || "Unknown";
+```
+
+Para sprints fechadas com `asOf`, o WIQL encontra itens que estavam na sprint naquela data. Mas `fetchWorkItemDetails` retorna os campos **atuais** (sem asOf). Se o primeiro item da lista foi movido para Sprint 8, `iterPath` vira o path da Sprint 8, e **todos os itens** parecem ter o mesmo path → `isSpillover = false` para todos. Pior: a sprint lookup (`azure_iteration_path = iterPath`) pode encontrar/criar a sprint errada.
 
 ## Solução
+Usar `currentIteration.path` (que contém o path correto da sprint sendo sincronizada) como referência para spillover, em vez do primeiro work item:
 
-### 1. `supabase/functions/azure-sync/index.ts`
-Na função `syncToDatabase`, após processar os work items:
+```typescript
+// ANTES (bugado):
+const currentIterPath = workItems[0].fields["System.IterationPath"];
+const iterPath = currentIterPath || "Unknown";
 
-- Extrair `System.AssignedTo` de cada work item (contém `displayName`, `uniqueName`, `id`)
-- Coletar todos os `uniqueName` distintos do batch
-- Para cada pessoa, fazer upsert na tabela `users` usando `azure_devops_unique_name` como chave de match (buscar existente com `ilike`, criar se não existir)
-- Mapear `uniqueName → user.id` e gravar `assigned_to_user_id` no insert do work_item
+// DEPOIS (correto):
+const iterPath = currentIteration?.path || 
+  (workItems.length > 0 ? workItems[0].fields["System.IterationPath"] : null) || 
+  "Unknown";
+```
 
-Campos do Azure DevOps disponíveis em `System.AssignedTo`:
-- `displayName` → `users.name`
-- `uniqueName` → `users.email` e `users.azure_devops_unique_name`
+Isso garante que:
+1. A sprint correta seja encontrada/criada no banco
+2. Itens com IterationPath diferente (movidos para outra sprint) sejam marcados como spillover
 
-### 2. Nenhuma mudança no frontend
-O hook `useSprintDetailData` já faz join com a tabela `users` e popula `assigned_to_name`. A tabela de work items operacionais já tem a coluna "Responsável". Basta que o dado exista no banco.
-
-## Arquivos alterados
-- `supabase/functions/azure-sync/index.ts` — extrair AssignedTo, upsert users, gravar assigned_to_user_id
+## Arquivo alterado
+- `supabase/functions/azure-sync/index.ts` — linhas 395-409: priorizar `currentIteration.path`
 
 ## Após implementação
-Re-sincronizar para que os responsáveis sejam populados.
+Re-sincronizar todas as squads via "Carregar Histórico 2026" para que o spillover seja detectado corretamente.
 
