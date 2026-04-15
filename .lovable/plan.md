@@ -1,24 +1,35 @@
 
 
-# Filtrar sprints futuras de toda a aplicação
+# Ajustar página Squads: Gráficos de pizza + filtrar work items por sprint atual
 
-## Problema
-O filtro de sprint no dashboard e listagens inclui sprints futuras (ex: "2026 - Sprint 9", "2026 - Sprint 10") que ainda não começaram. Essas não devem aparecer.
+## Problemas
+
+1. **"Por Tipo" e "Por Estado"** são listas simples — devem ser gráficos de pizza (PieChart do Recharts). Excluir itens com estado "Closed" de ambos os agrupamentos.
+2. **Work Items e KPIs** usam `useWorkItemsBySquad` que busca TODOS os work items da squad (sem filtro de sprint). Devem mostrar apenas os itens da sprint corrente.
 
 ## Mudanças
 
-### `src/hooks/useDashboardData.ts` (linha 28-33)
-- Filtrar sprints cujo `start_date > hoje` antes de popular `sprintNamesSet`
-- Apenas sprints com `start_date <= hoje` entram na lista `allSprintNames`
+### `src/hooks/useSquadsData.ts`
+- Alterar `useWorkItemsBySquad` para aceitar um `sprintId` opcional e filtrar por `sprint_id` quando fornecido.
+- Alternativa: manter o hook como está e filtrar no componente (mais simples, sem breaking change).
 
 ### `src/pages/Squads.tsx`
-- Na listagem de sprints da squad, filtrar sprints futuras (`start_date > hoje`) para não exibi-las na tabela/seletor
 
-### `src/lib/sprint-utils.ts`
-- Adicionar helper `isSprintFuture(sprint)` que retorna `true` se `start_date > hoje`
+**1. Filtrar work items pela sprint atual:**
+- Identificar `currentSprint` com `getCurrentSprint(sprints)`
+- Filtrar `workItems` por `wi.sprint_id === currentSprint.id` para KPIs e tabela
+
+**2. Excluir "Closed" dos agrupamentos por tipo e estado:**
+- Antes de agrupar `byType` e `byState`, filtrar itens cujo `state !== "Closed"`
+
+**3. Trocar listas por PieChart (Recharts):**
+- Importar `PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend` de `recharts`
+- Substituir as divs de lista nos cards "Por Tipo" e "Por Estado" por gráficos de pizza
+- Definir paleta de cores para as fatias (ex: azul, vermelho, amarelo, verde, roxo)
+- Cada fatia mostra o tipo/estado e a quantidade
+
+**4. Remover coluna "Pontos"** da tabela de work items (o projeto não usa story points)
 
 ## Arquivos alterados
-- `src/lib/sprint-utils.ts` — novo helper `isSprintFuture`
-- `src/hooks/useDashboardData.ts` — excluir sprints futuras do filtro
-- `src/pages/Squads.tsx` — não exibir sprints futuras
+- `src/pages/Squads.tsx` — gráficos de pizza, filtro por sprint atual, remover "Pontos"
 
