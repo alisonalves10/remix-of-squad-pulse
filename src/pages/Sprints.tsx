@@ -318,7 +318,6 @@ const SprintDetail = () => {
             variant={commitment >= 60 ? "success" : "warning"}
           />
           <KPICard
-          <KPICard
             title="Bugs"
             value={`${bugsResolved}/${bugsCreated}`}
             subtitle={bugsCreated > 0 ? `${Math.round((bugsResolved / bugsCreated) * 100)}% resolvidos` : "Nenhum bug na sprint"}
