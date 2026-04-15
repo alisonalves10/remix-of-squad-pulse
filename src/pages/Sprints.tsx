@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { FileText, CheckCircle, AlertTriangle, RotateCcw, Clock, Bug, Calendar, Search, RefreshCw, ChevronDown, ChevronRight, Layers, Star, BookOpen } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { useSprintDetailData } from "@/hooks/useSprintDetailData";
+import { isSprintActive as isSprintActiveFn } from "@/lib/sprint-utils";
 import { useExport } from "@/hooks/useExport";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
@@ -66,8 +67,7 @@ const SprintDetail = () => {
   };
 
   // Check if current sprint is active (for sync button)
-  const todayStr = new Date().toISOString().split("T")[0];
-  const isSprintActive = data ? !data.sprint.is_closed && data.sprint.end_date >= todayStr : false;
+  const sprintIsActive = data ? isSprintActiveFn(data.sprint) : false;
 
   const handleResync = async () => {
     if (!data) return;
@@ -244,7 +244,7 @@ const SprintDetail = () => {
               ))}
             </SelectContent>
           </Select>
-          {isSprintActive && (
+          {sprintIsActive && (
             <Button
               variant="outline"
               size="sm"
@@ -272,10 +272,10 @@ const SprintDetail = () => {
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Calendar className="h-4 w-4" />
                 <span>{sprint.start_date} → {sprint.end_date}</span>
-                {sprint.is_closed ? (
-                  <Badge variant="secondary" className="ml-2">Fechada</Badge>
-                ) : (
+                {isSprintActiveFn(sprint) ? (
                   <Badge className="bg-primary/10 text-primary border-primary/20 ml-2">Em andamento</Badge>
+                ) : (
+                  <Badge variant="secondary" className="ml-2">Fechada</Badge>
                 )}
               </div>
             </div>

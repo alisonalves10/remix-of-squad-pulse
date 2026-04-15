@@ -39,7 +39,7 @@ export function useSprintDetailData(sprintId?: string) {
             const squadId = backoffice?.id || squadsData[0]?.id;
             const squadSprints = sprints.filter(s => s.squad_id === squadId);
             const todayStr = formatDateKey(new Date());
-            const current = squadSprints.find(s => !s.is_closed && s.start_date <= todayStr && s.end_date >= todayStr);
+            const current = squadSprints.find(s => s.start_date <= todayStr && s.end_date >= todayStr);
             return current || squadSprints[0] || sprints[0];
           })();
 

@@ -10,6 +10,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, TrendingUp, Target, Calendar, Package, Bug, CheckCircle, Loader2 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useSquads, useSprintsBySquad, useMetricsBySquad, useWorkItemsBySquad } from "@/hooks/useSquadsData";
+import { getCurrentSprint, isSprintActive } from "@/lib/sprint-utils";
 import { useExport } from "@/hooks/useExport";
 import { format } from "date-fns";
 
@@ -29,7 +30,7 @@ const Squads = () => {
   const kpis = useMemo(() => {
     if (!workItems || !metrics || !sprints) return null;
 
-    const currentSprint = sprints[0];
+    const currentSprint = getCurrentSprint(sprints) || sprints[0];
     const currentMetrics = metrics.find(m => m.sprint_id === currentSprint?.id);
 
     const totalItems = workItems.length;
@@ -90,7 +91,7 @@ const Squads = () => {
         end_date: sp.end_date,
         items_planned: m?.items_planned ?? 0,
         items_completed: m?.items_completed ?? 0,
-        status: sp.is_closed ? "Fechada" : "Em andamento",
+        status: isSprintActive(sp) ? "Em andamento" : "Fechada",
       };
     }),
   };
@@ -267,10 +268,10 @@ const Squads = () => {
                         <TableCell className="text-right font-mono">{m?.items_planned ?? "-"}</TableCell>
                         <TableCell className="text-right font-mono">{m?.items_completed ?? "-"}</TableCell>
                         <TableCell className="text-center">
-                          {sprint.is_closed ? (
-                            <Badge variant="secondary">Fechada</Badge>
-                          ) : (
+                          {isSprintActive(sprint) ? (
                             <Badge className="bg-primary/10 text-primary border-primary/20">Em andamento</Badge>
+                          ) : (
+                            <Badge variant="secondary">Fechada</Badge>
                           )}
                         </TableCell>
                         <TableCell>
