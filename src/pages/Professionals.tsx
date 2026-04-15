@@ -12,8 +12,15 @@ import { useState, useMemo, useEffect } from "react";
 import { useUsers, useNonFutureSprints, useWorkItemsByUser } from "@/hooks/useProfessionalsData";
 import { useSquads } from "@/hooks/useSquadsData";
 import { useExport } from "@/hooks/useExport";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+
+const ROLE_OPTIONS = ["Desenvolvedor", "QA", "Tech Lead", "Product Owner", "Designer", "Scrum Master", "Analista", "Outro"];
 
 const Professionals = () => {
+  const queryClient = useQueryClient();
   const { exportToPDF, exportToExcel } = useExport();
   const { data: users, isLoading: usersLoading } = useUsers();
   const { data: squads } = useSquads();
@@ -22,6 +29,8 @@ const Professionals = () => {
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [selectedSquadFilter, setSelectedSquadFilter] = useState("all");
   const [selectedSprintFilter, setSelectedSprintFilter] = useState("all");
+  const [editingRole, setEditingRole] = useState(false);
+  const [customRole, setCustomRole] = useState("");
 
   // Auto-select first user
   useEffect(() => {
@@ -174,7 +183,7 @@ const Professionals = () => {
                   <SelectContent>
                     {(users || []).map(u => (
                       <SelectItem key={u.id} value={u.id}>
-                        {u.name} {u.role ? `- ${u.role}` : ""}
+                        {u.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -223,9 +232,62 @@ const Professionals = () => {
               <Card className="shadow-card border-l-4 border-l-primary">
                 <CardContent className="p-6">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div>
+                    <div className="flex-1">
                       <h2 className="text-xl font-semibold">{selectedUser.name}</h2>
-                      <p className="text-muted-foreground">{selectedUser.role || "Sem cargo definido"}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-sm text-muted-foreground">Atribuição:</span>
+                        {editingRole ? (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              value={customRole}
+                              onChange={(e) => setCustomRole(e.target.value)}
+                              placeholder="Digite a atribuição"
+                              className="h-8 w-[200px]"
+                              onKeyDown={async (e) => {
+                                if (e.key === "Enter" && customRole.trim()) {
+                                  const { error } = await supabase.from("users").update({ role: customRole.trim() }).eq("id", selectedUserId);
+                                  if (!error) {
+                                    queryClient.invalidateQueries({ queryKey: ["users"] });
+                                    toast.success("Atribuição atualizada!");
+                                  } else {
+                                    toast.error("Erro ao atualizar atribuição");
+                                  }
+                                  setEditingRole(false);
+                                }
+                                if (e.key === "Escape") setEditingRole(false);
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <Select
+                            value={selectedUser.role || ""}
+                            onValueChange={async (value) => {
+                              if (value === "__custom__") {
+                                setCustomRole(selectedUser.role || "");
+                                setEditingRole(true);
+                                return;
+                              }
+                              const { error } = await supabase.from("users").update({ role: value }).eq("id", selectedUserId);
+                              if (!error) {
+                                queryClient.invalidateQueries({ queryKey: ["users"] });
+                                toast.success("Atribuição atualizada!");
+                              } else {
+                                toast.error("Erro ao atualizar atribuição");
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="h-8 w-[200px]">
+                              <SelectValue placeholder="Definir atribuição" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ROLE_OPTIONS.map(role => (
+                                <SelectItem key={role} value={role}>{role}</SelectItem>
+                              ))}
+                              <SelectItem value="__custom__">Personalizado...</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
                     </div>
                     {selectedUser.squad_id && squads && (
                       <Badge variant="outline" className="w-fit">
