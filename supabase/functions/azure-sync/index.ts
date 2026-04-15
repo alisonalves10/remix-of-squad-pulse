@@ -392,7 +392,11 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
     squadId = newSquad.id;
   }
 
-  const currentIterPath = workItems.length > 0 ? workItems[0].fields["System.IterationPath"] : null;
+  // Use the iteration path from the iteration object (correct for closed sprints with asOf)
+  // Fallback to first work item's path only if iteration object doesn't have it
+  const iterPath = currentIteration?.path || 
+    (workItems.length > 0 ? workItems[0].fields["System.IterationPath"] : null) || 
+    "Unknown";
   // NOTE: Stale sprint cleanup removed to preserve historical data
 
   let startDate: string;
@@ -405,8 +409,6 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
     startDate = today.toISOString().split("T")[0];
     endDate = new Date(today.getTime() + 14 * 86400000).toISOString().split("T")[0];
   }
-
-  const iterPath = currentIterPath || "Unknown";
   const sprintName = currentIteration?.name || iterPath.split("\\").pop() || iterPath;
 
   const todayStr = new Date().toISOString().split("T")[0];
