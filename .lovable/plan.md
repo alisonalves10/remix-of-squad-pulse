@@ -1,50 +1,27 @@
 
 
-# Profissionais: dados reais do banco + ajustes de métricas
+# Gráfico "Itens por Sprint" com Planejado vs Concluído
 
-## Resumo
-Substituir todos os dados mock da página Profissionais por dados reais (tabelas `users`, `work_items`, `sprints`, `squads`). Trocar "Story Points" por "Horas" em todos os lugares. Adicionar coluna `area_path` na tabela `work_items`. Adicionar filtro por sprint no topo e trazer histórico do ano inteiro.
+## Objetivo
+Transformar o gráfico de barras simples "Itens por Sprint" em um gráfico com duas barras por sprint: **Planejado** (total de itens atribuídos) e **Concluído** (itens com estado Done/Closed), mostrando a performance real do profissional.
 
-## Mudanças no banco de dados
+## Mudanças
 
-### Migration: adicionar `area_path` à tabela `work_items`
-```sql
-ALTER TABLE work_items ADD COLUMN area_path text;
-```
+### `src/pages/Professionals.tsx`
+- Alterar o `itemsBySprintData` para calcular dois valores por sprint:
+  - `planned`: contagem total de itens na sprint
+  - `completed`: contagem de itens com estado "Done" ou "Closed"
+- Substituir o `VelocityChart` do "Itens por Sprint" por um gráfico customizado com duas barras (Recharts `BarChart` com dois `Bar`: um azul para Planejado, um verde para Concluído) e uma `Legend`
 
-### Atualizar Azure Sync (`supabase/functions/azure-sync/index.ts`)
-- Na inserção de work_items (linha ~508), adicionar `area_path: wi.fields["System.AreaPath"] || null`
+### `src/components/dashboard/VelocityChart.tsx`
+- Não será alterado — o gráfico de "Horas por Sprint" continua usando o componente existente
+- O novo gráfico de "Itens por Sprint" será implementado inline na página Professionals (ou como um novo componente) com suporte a duas séries de dados
 
-## Novo hook: `src/hooks/useProfessionalsData.ts`
-- `useProfessionals()` — busca todos os `users` com seus dados
-- `useWorkItemsByUser(userId, year)` — busca work_items filtrados por `assigned_to_user_id` e sprints do ano (2026), com join em sprints para obter nome da sprint. Não trazer sprints futuras.
-- Cálculos de KPIs: total de horas (`SUM(completed_work)`), itens concluídos, bugs resolvidos, média de horas por sprint
-
-## Página `src/pages/Professionals.tsx` — reescrever com dados reais
-
-### Filtros (topo)
-- **Profissional**: Select populado com `users` reais
-- **Sprint**: Select com todas as sprints não-futuras do ano (default "Todas"), filtra a tabela de histórico
-- Manter filtro de Squad opcional
-
-### KPIs (4 cards)
-- **Horas Lançadas** (antes "Story Points") — `SUM(completed_work)` dos itens do profissional no ano
-- **Itens Concluídos** — contagem de itens
-- **Bugs Resolvidos** — contagem de itens tipo Bug com estado Done/Closed
-- **Média por Sprint** → "Horas por Sprint" — total horas / número de sprints com atividade
-
-### Gráficos
-- **"Horas por Sprint"** (antes "Story Points por Sprint") — bar chart com `completed_work` agrupado por sprint
-- **"Itens por Sprint"** — mantém, agrupado por sprint
-
-### Tabela "Histórico de Itens"
-- Trazer todos os itens do ano (sprints de 2026), filtrável pelo select de sprint no topo
-- Colunas: Sprint | ID | Título | Tipo | **Horas** (antes "Points") | **Area Path** (nova) | Estado
-- Ordenar por sprint (mais recente primeiro)
+## Visual
+- Barra azul (primary) = Planejado
+- Barra verde (success) = Concluído
+- Legenda embaixo do gráfico
 
 ## Arquivos alterados
-- **Migration SQL** — `area_path` em `work_items`
-- **`supabase/functions/azure-sync/index.ts`** — gravar `area_path`
-- **`src/hooks/useProfessionalsData.ts`** — novo hook com queries reais
-- **`src/pages/Professionals.tsx`** — reescrever com dados reais, trocar SP por horas, filtro de sprint, coluna area_path
+- `src/pages/Professionals.tsx` — novo cálculo de dados e gráfico de barras duplas
 
