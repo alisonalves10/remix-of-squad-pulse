@@ -1,44 +1,32 @@
 
 
-# Alinhar Dashboard Geral com a lógica das Sprints
+# Corrigir Dashboard Geral: Horas em vez de Story Points + Dados Consistentes
 
-## Problema
-O Dashboard Geral usa `metrics_snapshot` para bugs (bugs_created/bugs_resolved), enquanto a página de Sprint calcula bugs diretamente dos `work_items` (type === "Bug", estado Done/Closed = resolvido). Isso pode gerar divergências.
+## Problemas identificados
 
-## Mudanças em `src/hooks/useDashboardData.ts`
+1. **"pts" em vez de "h"**: A tabela SquadsTable exibe `velocity pts` (linha 67) e o gráfico de barras mostra tooltip "Story Points" (VelocityChart linha 47). Tudo precisa ser em horas.
 
-### 1. Bugs — usar work_items (como na sprint)
-Substituir a lógica de bugs baseada em `metrics_snapshot` por contagem direta dos `work_items` da sprint mais recente de cada squad:
-- `bugsCreated` = work_items com `type === "Bug"`
-- `bugsResolved` = work_items com `type === "Bug"` e `state in ["Done", "Closed"]`
-- `bugRate` = bugsCreated > 0 ? `Math.round((bugsResolved / bugsCreated) * 100)` : 0
-- Inverter a semântica: mostrar **taxa de resolução** (não de criação), consistente com sprint
+2. **Dados inconsistentes**: O dashboard usa a sprint mais recente de cada squad (incluindo sprints em andamento com poucos dados). Por exemplo, Backoffice Sprint 10 tem apenas 2h concluídas, dando uma visão distorcida. Deveria usar a **última sprint fechada** (`is_closed = true`) para métricas confiáveis na tabela e KPIs.
 
-### 2. Completion Rate — adicionar ao dashboard
-Calcular `completionRate` global (itens Done/Closed vs total) da sprint mais recente de cada squad, igual à sprint:
-- Total de itens e concluídos (state in ["Done", "Closed"]) somados across squads
-- Exibir como subtitle no KPI de "Squads Monitoradas" ou como novo KPI
+3. **Spillover e Bugs zerados**: Como pega sprints em andamento (Sprint 8, 9, 10), ainda não há bugs nem spillover detectado. Usando a última sprint fechada, os dados serão consistentes com o que a página de sprint mostra.
 
-### 3. Spillover — manter (já consistente)
-Já usa `work_items.is_spillover`, igual à sprint.
+## Mudanças
 
-### 4. Velocity e Commitment — manter (já consistente)
-Já usa `metrics_snapshot.completed_hours/planned_hours`, igual à sprint.
+### `src/hooks/useDashboardData.ts`
+- Alterar `latestSprintBySquad` para pegar a última sprint **fechada** (`is_closed === true`) em vez da última sprint absoluta
+- Fallback: se não houver sprint fechada, usar a mais recente
 
-## Mudanças em `src/pages/Index.tsx`
+### `src/components/dashboard/SquadsTable.tsx`
+- Linha 67: trocar `{squad.velocity} pts` por `{squad.velocity}h`
 
-### KPI de Bugs
-- Mudar label para "Bugs" com valor `bugsCreated/bugsResolved` (ex: "5/3")
-- Subtitle: taxa de resolução (ex: "60% resolvidos")
-- Variant: `bugsCreated === 0 ? "success" : bugsResolved >= bugsCreated ? "success" : "danger"`
+### `src/components/dashboard/VelocityChart.tsx`
+- Linha 47: trocar `name="Story Points"` por `name="Horas"`
 
-### KPI de Completion Rate
-- Adicionar subtitle no KPI "Squads Monitoradas" com `completionRate% entregue` ou trocar por um KPI dedicado de "Entrega"
-
-### Squad Table — adicionar coluna de bugs
-- Incluir `bugsCreated` e `bugsResolved` por squad no `squadTableData`
+### `src/pages/Index.tsx`
+- Sem mudanças estruturais (já usa "h" nos KPIs)
 
 ## Arquivos alterados
-- **`src/hooks/useDashboardData.ts`** — recalcular bugs via work_items, adicionar completionRate global
-- **`src/pages/Index.tsx`** — atualizar KPIs de bugs e adicionar completion rate
+- `src/hooks/useDashboardData.ts` — priorizar última sprint fechada
+- `src/components/dashboard/SquadsTable.tsx` — "pts" → "h"
+- `src/components/dashboard/VelocityChart.tsx` — "Story Points" → "Horas"
 
