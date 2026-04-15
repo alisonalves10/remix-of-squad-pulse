@@ -2,7 +2,8 @@ import {
   LayoutDashboard, 
   Users, 
   Calendar, 
-  User, 
+  User,
+  BarChart3,
   Settings, 
   Activity,
   TrendingUp,
@@ -33,6 +34,7 @@ const mainNavItems = [
   { title: "Squads", url: "/squads", icon: Users },
   { title: "Sprints", url: "/sprints", icon: Calendar },
   { title: "Profissionais", url: "/professionals", icon: User },
+  { title: "Ranking", url: "/ranking", icon: BarChart3 },
 ];
 
 const configNavItems = [
