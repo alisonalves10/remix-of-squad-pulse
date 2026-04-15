@@ -1,35 +1,48 @@
 
 
-# Ajustar página Squads: Gráficos de pizza + filtrar work items por sprint atual
+# 4 ajustes: gráficos de pizza, sidebar, dashboard KPI, filtro de sprint nos work items
 
-## Problemas
+## 1. Gráficos de pizza — mostrar só valores, aumentar tamanho
 
-1. **"Por Tipo" e "Por Estado"** são listas simples — devem ser gráficos de pizza (PieChart do Recharts). Excluir itens com estado "Closed" de ambos os agrupamentos.
-2. **Work Items e KPIs** usam `useWorkItemsBySquad` que busca TODOS os work items da squad (sem filtro de sprint). Devem mostrar apenas os itens da sprint corrente.
+**Arquivo:** `src/pages/Squads.tsx` (linhas 190-222)
 
-## Mudanças
+- Trocar `label={({ name, value }) => \`${name}: ${value}\`}` por `label={({ value }) => value}` em ambos os PieCharts
+- Aumentar `outerRadius` de 90 para 110 e `height` de 280 para 320
 
-### `src/hooks/useSquadsData.ts`
-- Alterar `useWorkItemsBySquad` para aceitar um `sprintId` opcional e filtrar por `sprint_id` quando fornecido.
-- Alternativa: manter o hook como está e filtrar no componente (mais simples, sem breaking change).
+## 2. Indicador de sprint atual na sidebar
 
-### `src/pages/Squads.tsx`
+**Arquivo:** `src/components/layout/AppSidebar.tsx`
 
-**1. Filtrar work items pela sprint atual:**
-- Identificar `currentSprint` com `getCurrentSprint(sprints)`
-- Filtrar `workItems` por `wi.sprint_id === currentSprint.id` para KPIs e tabela
+- Importar `useSprintsBySquad` ou criar query simples para buscar a sprint ativa (date-based)
+- No `SidebarFooter`, acima do botão "Sair", exibir um badge/texto com o nome da sprint em andamento (ex: "Sprint 8 em andamento" com ícone Calendar)
+- Usar `getCurrentSprint` de `sprint-utils` para determinar qual sprint mostrar
+- Buscar todas as sprints sem filtro de squad e encontrar a ativa
 
-**2. Excluir "Closed" dos agrupamentos por tipo e estado:**
-- Antes de agrupar `byType` e `byState`, filtrar itens cujo `state !== "Closed"`
+## 3. Dashboard geral — trocar "Velocidade Média" por "Horas Lançadas"
 
-**3. Trocar listas por PieChart (Recharts):**
-- Importar `PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend` de `recharts`
-- Substituir as divs de lista nos cards "Por Tipo" e "Por Estado" por gráficos de pizza
-- Definir paleta de cores para as fatias (ex: azul, vermelho, amarelo, verde, roxo)
-- Cada fatia mostra o tipo/estado e a quantidade
+**Arquivo:** `src/pages/Index.tsx` (linhas 119-124)
 
-**4. Remover coluna "Pontos"** da tabela de work items (o projeto não usa story points)
+- Trocar título "Velocidade Média" por "Horas Lançadas"
+- Trocar `value={avgVelocity}h` por total de horas (soma, não média)
+- Trocar subtitle "Horas por sprint" por "Total na sprint selecionada"
+
+**Arquivo:** `src/hooks/useDashboardData.ts`
+
+- Expor `totalVelocity` (já calculado na linha 100, é a soma de `completed` hours) no retorno, renomeado como `totalHoursLogged`
+- Manter `avgVelocity` para não quebrar outros usos, mas adicionar o campo total
+
+## 4. Filtro de sprint manual na tabela de work items
+
+**Arquivo:** `src/pages/Squads.tsx`
+
+- Adicionar estado `selectedWorkItemsSprintId` (default = `currentSprint?.id`)
+- No header do card "Work Items", adicionar um `Select` com as sprints não-futuras da squad
+- Filtrar `workItems` pelo sprint selecionado no select (em vez de fixo no `currentSprint`)
+- Atualizar título e descrição do card para refletir a sprint escolhida
 
 ## Arquivos alterados
-- `src/pages/Squads.tsx` — gráficos de pizza, filtro por sprint atual, remover "Pontos"
+- `src/pages/Squads.tsx` — labels dos pies, tamanho, filtro de sprint nos work items
+- `src/components/layout/AppSidebar.tsx` — indicador de sprint ativa
+- `src/pages/Index.tsx` — trocar KPI "Velocidade Média" por "Horas Lançadas"
+- `src/hooks/useDashboardData.ts` — expor total de horas
 
