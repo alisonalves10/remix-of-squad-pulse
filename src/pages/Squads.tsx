@@ -83,7 +83,7 @@ const Squads = () => {
       { header: "Itens Concluídos", key: "items_completed" },
       { header: "Status", key: "status" },
     ],
-    data: (sprints || []).map(sp => {
+    data: (sprints || []).filter(sp => !isSprintFuture(sp)).map(sp => {
       const m = metrics?.find(me => me.sprint_id === sp.id);
       return {
         name: sp.name,
