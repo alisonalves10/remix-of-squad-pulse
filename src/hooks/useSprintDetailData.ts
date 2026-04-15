@@ -279,6 +279,7 @@ export function useSprintDetailData(sprintId?: string) {
         plannedHours,
         completedHours,
         commitment,
+        completionRate,
         types,
         states,
         burndownData,
