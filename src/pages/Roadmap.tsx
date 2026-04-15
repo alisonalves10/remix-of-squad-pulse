@@ -165,10 +165,10 @@ const Roadmap = () => {
       category: fd.get("category") as string,
     });
     if (error) {
-      toast.error("Erro ao adicionar iniciativa");
+      toast.error("Erro ao adicionar demanda");
       return;
     }
-    toast.success("Iniciativa adicionada");
+    toast.success("Demanda adicionada");
     queryClient.invalidateQueries({ queryKey: ["roadmap_items"] });
     setAddDialogOpen(false);
   };
@@ -206,7 +206,7 @@ const Roadmap = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Roadmap Executivo</h1>
-            <p className="text-muted-foreground text-sm">Visão estratégica de iniciativas, investimentos e entregas</p>
+            <p className="text-muted-foreground text-sm">Visão estratégica de demandas, investimentos e entregas</p>
           </div>
           <div className="flex gap-2">
             <Dialog open={addBUDialogOpen} onOpenChange={setAddBUDialogOpen}>
@@ -224,10 +224,10 @@ const Roadmap = () => {
             </Dialog>
             <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
               <DialogTrigger asChild>
-                <Button size="sm"><Plus className="h-4 w-4 mr-1" />Iniciativa</Button>
+                <Button size="sm"><Plus className="h-4 w-4 mr-1" />Demanda</Button>
               </DialogTrigger>
               <DialogContent className="max-w-lg">
-                <DialogHeader><DialogTitle>Nova Iniciativa</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>Nova Demanda</DialogTitle></DialogHeader>
                 <form onSubmit={handleAddItem} className="space-y-3">
                   <div><Label>Título</Label><Input name="title" required /></div>
                   <div><Label>Descrição</Label><Textarea name="description" /></div>
@@ -277,7 +277,7 @@ const Roadmap = () => {
                     <div><Label>Data Início</Label><Input name="start_date" type="date" /></div>
                     <div><Label>Data Fim</Label><Input name="end_date" type="date" /></div>
                   </div>
-                  <Button type="submit" className="w-full">Salvar Iniciativa</Button>
+                  <Button type="submit" className="w-full">Salvar Demanda</Button>
                 </form>
               </DialogContent>
             </Dialog>
@@ -299,7 +299,7 @@ const Roadmap = () => {
           <KPICard
             title="Em Andamento"
             value={inProgress}
-            subtitle="Iniciativas ativas"
+            subtitle="Demandas ativas"
             icon={Rocket}
           />
           <KPICard
@@ -362,16 +362,16 @@ const Roadmap = () => {
           <TabsContent value="timeline">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Timeline de Iniciativas</CardTitle>
+                <CardTitle className="text-lg">Timeline de Demandas</CardTitle>
                 <CardDescription>Visão temporal por trimestre — estilo Gantt</CardDescription>
               </CardHeader>
               <CardContent>
                 {timelineData.items.length === 0 ? (
-                  <p className="text-muted-foreground text-sm text-center py-8">Nenhuma iniciativa com datas definidas</p>
+                  <p className="text-muted-foreground text-sm text-center py-8">Nenhuma demanda com datas definidas</p>
                 ) : (
                   <div className="space-y-2 overflow-x-auto">
                     <div className="flex border-b pb-2 min-w-[800px]">
-                      <div className="w-48 shrink-0 text-xs font-medium text-muted-foreground">Iniciativa</div>
+                      <div className="w-48 shrink-0 text-xs font-medium text-muted-foreground">Demanda</div>
                       <div className="flex-1 grid" style={{ gridTemplateColumns: `repeat(${timelineData.quarters.length}, 1fr)` }}>
                         {timelineData.quarters.map(q => (
                           <div key={q} className="text-xs text-center font-medium text-muted-foreground">{q}</div>
@@ -418,7 +418,7 @@ const Roadmap = () => {
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Iniciativas</span>
+                      <span className="text-muted-foreground">Demandas</span>
                       <span className="font-medium">{bu.total}</span>
                     </div>
                     <div className="flex justify-between text-sm">
@@ -454,7 +454,7 @@ const Roadmap = () => {
               </CardHeader>
               <CardContent>
                 {squadData.length === 0 ? (
-                  <p className="text-muted-foreground text-sm text-center py-8">Nenhuma iniciativa atribuída a squads</p>
+                  <p className="text-muted-foreground text-sm text-center py-8">Nenhuma demanda atribuída a squads</p>
                 ) : (
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={squadData}>
@@ -470,7 +470,7 @@ const Roadmap = () => {
                         }}
                       />
                       <Legend />
-                      <Bar dataKey="total" name="Iniciativas" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="total" name="Demandas" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                       <Bar dataKey="hours" name="Horas" fill="hsl(38, 92%, 50%)" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -530,8 +530,8 @@ const Roadmap = () => {
           <TabsContent value="table">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Iniciativas</CardTitle>
-                <CardDescription>{filteredItems.length} iniciativas encontradas</CardDescription>
+                <CardTitle className="text-lg">Demandas</CardTitle>
+                <CardDescription>{filteredItems.length} demandas encontradas</CardDescription>
               </CardHeader>
               <CardContent>
                 <Table>
@@ -570,7 +570,7 @@ const Roadmap = () => {
                     })}
                     {filteredItems.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhuma iniciativa encontrada</TableCell>
+                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhuma demanda encontrada</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
