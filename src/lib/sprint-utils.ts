@@ -14,3 +14,9 @@ export function isSprintFinished(sprint: { start_date: string; end_date: string 
   const today = new Date().toISOString().split("T")[0];
   return sprint.end_date < today;
 }
+
+/** Check if a sprint is in the future (start_date > today) */
+export function isSprintFuture(sprint: { start_date: string; end_date: string }): boolean {
+  const today = new Date().toISOString().split("T")[0];
+  return sprint.start_date > today;
+}

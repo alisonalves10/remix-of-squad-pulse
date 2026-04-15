@@ -23,9 +23,10 @@ export function useDashboardData(selectedSquadId?: string | null, selectedSprint
       const metrics = metricsRes.data.filter(m => !selectedSquadId || m.squad_id === selectedSquadId);
       const workItems = workItemsRes.data.filter(wi => !selectedSquadId || wi.squad_id === selectedSquadId);
 
-      // Collect unique sprint names for the filter (sorted by date desc)
+      // Collect unique sprint names for the filter (sorted by date desc), excluding future sprints
+      const today = new Date().toISOString().split("T")[0];
       const sprintNamesSet = new Map<string, string>();
-      for (const s of [...sprintsRes.data].sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime())) {
+      for (const s of [...sprintsRes.data].filter(s => s.start_date <= today).sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime())) {
         if (!sprintNamesSet.has(s.name)) {
           sprintNamesSet.set(s.name, s.start_date);
         }

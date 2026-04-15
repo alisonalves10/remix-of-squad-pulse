@@ -10,7 +10,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, TrendingUp, Target, Calendar, Package, Bug, CheckCircle, Loader2 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useSquads, useSprintsBySquad, useMetricsBySquad, useWorkItemsBySquad } from "@/hooks/useSquadsData";
-import { getCurrentSprint, isSprintActive } from "@/lib/sprint-utils";
+import { getCurrentSprint, isSprintActive, isSprintFuture } from "@/lib/sprint-utils";
 import { useExport } from "@/hooks/useExport";
 import { format } from "date-fns";
 
@@ -83,7 +83,7 @@ const Squads = () => {
       { header: "Itens Concluídos", key: "items_completed" },
       { header: "Status", key: "status" },
     ],
-    data: (sprints || []).map(sp => {
+    data: (sprints || []).filter(sp => !isSprintFuture(sp)).map(sp => {
       const m = metrics?.find(me => me.sprint_id === sp.id);
       return {
         name: sp.name,
