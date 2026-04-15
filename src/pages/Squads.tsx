@@ -7,12 +7,22 @@ import { Button } from "@/components/ui/button";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { Link } from "react-router-dom";
-import { ArrowRight, TrendingUp, Target, Calendar, Package, Bug, CheckCircle, Loader2 } from "lucide-react";
+import { ArrowRight, TrendingUp, Target, Package, Bug, Loader2 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useSquads, useSprintsBySquad, useMetricsBySquad, useWorkItemsBySquad } from "@/hooks/useSquadsData";
 import { getCurrentSprint, isSprintActive, isSprintFuture } from "@/lib/sprint-utils";
 import { useExport } from "@/hooks/useExport";
 import { format } from "date-fns";
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from "recharts";
+
+const PIE_COLORS = [
+  "hsl(var(--primary))",
+  "hsl(var(--destructive))",
+  "hsl(38, 92%, 50%)",
+  "hsl(142, 71%, 45%)",
+  "hsl(270, 60%, 55%)",
+  "hsl(200, 70%, 50%)",
+];
 
 const Squads = () => {
   const { exportToPDF, exportToExcel } = useExport();
@@ -26,50 +36,52 @@ const Squads = () => {
   const { data: metrics } = useMetricsBySquad(activeSquadId);
   const { data: workItems } = useWorkItemsBySquad(activeSquadId);
 
-  // Compute KPIs from real data
+  const currentSprint = useMemo(() => {
+    if (!sprints) return undefined;
+    return getCurrentSprint(sprints) || sprints[0];
+  }, [sprints]);
+
+  // Filter work items to current sprint only
+  const currentWorkItems = useMemo(() => {
+    if (!workItems || !currentSprint) return [];
+    return workItems.filter(wi => wi.sprint_id === currentSprint.id);
+  }, [workItems, currentSprint]);
+
+  // Compute KPIs from current sprint work items
   const kpis = useMemo(() => {
-    if (!workItems || !metrics || !sprints) return null;
+    if (!currentWorkItems.length || !metrics || !sprints) return null;
 
-    const currentSprint = getCurrentSprint(sprints) || sprints[0];
-    const currentMetrics = metrics.find(m => m.sprint_id === currentSprint?.id);
-
-    const totalItems = workItems.length;
     const completedStates = ["Done", "Closed"];
-    const completedItems = workItems.filter(wi => completedStates.includes(wi.state)).length;
-    const totalPoints = workItems.reduce((sum, wi) => sum + (wi.story_points || 0), 0);
-    const completedPoints = workItems
+    const totalItems = currentWorkItems.length;
+    const completedItems = currentWorkItems.filter(wi => completedStates.includes(wi.state)).length;
+    const totalPoints = currentWorkItems.reduce((sum, wi) => sum + (wi.story_points || 0), 0);
+    const completedPoints = currentWorkItems
       .filter(wi => completedStates.includes(wi.state))
       .reduce((sum, wi) => sum + (wi.story_points || 0), 0);
-    const bugs = workItems.filter(wi => wi.type === "Bug").length;
-    const bugsResolved = workItems.filter(wi => wi.type === "Bug" && completedStates.includes(wi.state)).length;
+    const bugs = currentWorkItems.filter(wi => wi.type === "Bug").length;
+    const bugsResolved = currentWorkItems.filter(wi => wi.type === "Bug" && completedStates.includes(wi.state)).length;
 
-    // Group by type
+    // Exclude "Closed" for distribution charts
+    const chartItems = currentWorkItems.filter(wi => wi.state !== "Closed");
+
     const byType: Record<string, number> = {};
-    workItems.forEach(wi => {
-      byType[wi.type] = (byType[wi.type] || 0) + 1;
-    });
+    chartItems.forEach(wi => { byType[wi.type] = (byType[wi.type] || 0) + 1; });
 
-    // Group by state
     const byState: Record<string, number> = {};
-    workItems.forEach(wi => {
-      byState[wi.state] = (byState[wi.state] || 0) + 1;
-    });
+    chartItems.forEach(wi => { byState[wi.state] = (byState[wi.state] || 0) + 1; });
 
     const commitment = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
 
-    return {
-      totalItems,
-      completedItems,
-      totalPoints,
-      completedPoints,
-      bugs,
-      bugsResolved,
-      commitment,
-      byType,
-      byState,
-      currentMetrics,
-    };
-  }, [workItems, metrics, sprints]);
+    return { totalItems, completedItems, totalPoints, completedPoints, bugs, bugsResolved, commitment, byType, byState };
+  }, [currentWorkItems, metrics, sprints]);
+
+  const byTypeData = useMemo(() =>
+    kpis ? Object.entries(kpis.byType).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value) : [],
+  [kpis]);
+
+  const byStateData = useMemo(() =>
+    kpis ? Object.entries(kpis.byState).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value) : [],
+  [kpis]);
 
   const exportConfig = {
     title: `Relatório da Squad - ${squad?.name || ""}`,
@@ -158,74 +170,60 @@ const Squads = () => {
         {/* KPIs */}
         {kpis && (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <KPICard
-              title="Work Items"
-              value={`${kpis.completedItems}/${kpis.totalItems}`}
-              subtitle="Concluídos / Total"
-              icon={Package}
-              variant="default"
-            />
-            <KPICard
-              title="Cumprimento"
-              value={`${kpis.commitment}%`}
-              subtitle="Itens concluídos vs total"
-              icon={Target}
-              variant={kpis.commitment >= 50 ? "success" : "warning"}
-            />
-            <KPICard
-              title="Bugs"
-              value={`${kpis.bugsResolved}/${kpis.bugs}`}
-              subtitle="Resolvidos / Total"
-              icon={Bug}
-              variant={kpis.bugs === 0 ? "success" : kpis.bugsResolved >= kpis.bugs ? "success" : "warning"}
-            />
-            <KPICard
-              title="Story Points"
-              value={kpis.totalPoints > 0 ? `${kpis.completedPoints}/${kpis.totalPoints}` : "N/A"}
-              subtitle={kpis.totalPoints > 0 ? "Concluídos / Total" : "Sem pontos atribuídos"}
-              icon={TrendingUp}
-              variant="default"
-            />
+            <KPICard title="Work Items" value={`${kpis.completedItems}/${kpis.totalItems}`} subtitle="Concluídos / Total" icon={Package} variant="default" />
+            <KPICard title="Cumprimento" value={`${kpis.commitment}%`} subtitle="Itens concluídos vs total" icon={Target} variant={kpis.commitment >= 50 ? "success" : "warning"} />
+            <KPICard title="Bugs" value={`${kpis.bugsResolved}/${kpis.bugs}`} subtitle="Resolvidos / Total" icon={Bug} variant={kpis.bugs === 0 ? "success" : kpis.bugsResolved >= kpis.bugs ? "success" : "warning"} />
+            <KPICard title="Story Points" value={kpis.totalPoints > 0 ? `${kpis.completedPoints}/${kpis.totalPoints}` : "N/A"} subtitle={kpis.totalPoints > 0 ? "Concluídos / Total" : "Sem pontos atribuídos"} icon={TrendingUp} variant="default" />
           </div>
         )}
 
-        {/* Work Items by Type & State */}
+        {/* Pie Charts: Por Tipo & Por Estado */}
         {kpis && (
           <div className="grid gap-6 md:grid-cols-2">
             <Card className="shadow-card">
               <CardHeader>
                 <CardTitle className="text-lg">Por Tipo</CardTitle>
-                <CardDescription>Distribuição de work items por tipo</CardDescription>
+                <CardDescription>Distribuição de work items por tipo (excl. Closed)</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {Object.entries(kpis.byType).sort(([,a], [,b]) => b - a).map(([type, count]) => (
-                    <div key={type} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline">{type}</Badge>
-                      </div>
-                      <span className="font-mono text-sm font-medium">{count}</span>
-                    </div>
-                  ))}
-                </div>
+                {byTypeData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <Pie data={byTypeData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={({ name, value }) => `${name}: ${value}`}>
+                        {byTypeData.map((_, i) => (
+                          <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-center text-muted-foreground py-8">Sem dados</p>
+                )}
               </CardContent>
             </Card>
             <Card className="shadow-card">
               <CardHeader>
                 <CardTitle className="text-lg">Por Estado</CardTitle>
-                <CardDescription>Distribuição de work items por estado</CardDescription>
+                <CardDescription>Distribuição de work items por estado (excl. Closed)</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {Object.entries(kpis.byState).sort(([,a], [,b]) => b - a).map(([state, count]) => (
-                    <div key={state} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary">{state}</Badge>
-                      </div>
-                      <span className="font-mono text-sm font-medium">{count}</span>
-                    </div>
-                  ))}
-                </div>
+                {byStateData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <Pie data={byStateData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={({ name, value }) => `${name}: ${value}`}>
+                        {byStateData.map((_, i) => (
+                          <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-center text-muted-foreground py-8">Sem dados</p>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -257,7 +255,7 @@ const Squads = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sprints.map((sprint) => {
+                  {sprints.filter(sp => !isSprintFuture(sp)).map((sprint) => {
                     const m = metrics?.find(me => me.sprint_id === sprint.id);
                     return (
                       <TableRow key={sprint.id} className="group">
@@ -290,12 +288,12 @@ const Squads = () => {
           </CardContent>
         </Card>
 
-        {/* Work Items Table */}
-        {workItems && workItems.length > 0 && (
+        {/* Work Items Table — Current Sprint Only */}
+        {currentWorkItems.length > 0 && (
           <Card className="shadow-card">
             <CardHeader>
-              <CardTitle className="text-lg">Work Items - Sprint Corrente</CardTitle>
-              <CardDescription>{workItems.length} itens sincronizados do Azure DevOps</CardDescription>
+              <CardTitle className="text-lg">Work Items — {currentSprint?.name || "Sprint Corrente"}</CardTitle>
+              <CardDescription>{currentWorkItems.length} itens na sprint atual</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="max-h-[500px] overflow-auto">
@@ -306,19 +304,17 @@ const Squads = () => {
                       <TableHead>Tipo</TableHead>
                       <TableHead>Título</TableHead>
                       <TableHead>Estado</TableHead>
-                      <TableHead className="text-right">Pontos</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {workItems.map((wi) => (
+                    {currentWorkItems.map((wi) => (
                       <TableRow key={wi.id}>
                         <TableCell className="font-mono text-sm text-muted-foreground">{wi.id}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className={
                             wi.type === "Bug" ? "border-destructive/50 text-destructive" :
                             wi.type === "User Story" ? "border-primary/50 text-primary" :
-                            wi.type === "Epic" ? "border-accent-foreground/50" :
-                            ""
+                            wi.type === "Epic" ? "border-accent-foreground/50" : ""
                           }>
                             {wi.type}
                           </Badge>
@@ -328,14 +324,10 @@ const Squads = () => {
                           <Badge variant="secondary" className={
                             ["Done", "Closed"].includes(wi.state) ? "bg-success/10 text-success" :
                             ["Active", "Desenvolvimento", "Execução"].includes(wi.state) ? "bg-primary/10 text-primary" :
-                            ["Bloqueado"].includes(wi.state) ? "bg-destructive/10 text-destructive" :
-                            ""
+                            ["Bloqueado"].includes(wi.state) ? "bg-destructive/10 text-destructive" : ""
                           }>
                             {wi.state}
                           </Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {wi.story_points || "-"}
                         </TableCell>
                       </TableRow>
                     ))}
