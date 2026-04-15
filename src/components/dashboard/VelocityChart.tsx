@@ -44,7 +44,7 @@ export function VelocityChart({ data, title = "Velocidade por Squad", descriptio
                 dataKey="velocity" 
                 fill="hsl(var(--primary))" 
                 radius={[4, 4, 0, 0]}
-                name="Story Points"
+                name="Horas"
               />
             </BarChart>
           </ResponsiveContainer>
