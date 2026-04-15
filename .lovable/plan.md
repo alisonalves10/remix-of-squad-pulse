@@ -1,23 +1,44 @@
 
 
-# Melhorias nos KPIs da Sprint
+# Alinhar Dashboard Geral com a lógica das Sprints
 
-## 1. Porcentagem de entrega de itens
-Adicionar subtitle com a porcentagem de itens concluídos no KPI "Itens Concluídos".
+## Problema
+O Dashboard Geral usa `metrics_snapshot` para bugs (bugs_created/bugs_resolved), enquanto a página de Sprint calcula bugs diretamente dos `work_items` (type === "Bug", estado Done/Closed = resolvido). Isso pode gerar divergências.
 
-**Em `src/hooks/useSprintDetailData.ts`:**
-- Calcular `completionRate = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0`
-- Retornar `completionRate` no objeto de retorno
+## Mudanças em `src/hooks/useDashboardData.ts`
 
-**Em `src/pages/Sprints.tsx`:**
-- No KPI "Itens Concluídos", adicionar `subtitle={`${completionRate}% concluídos`}`
+### 1. Bugs — usar work_items (como na sprint)
+Substituir a lógica de bugs baseada em `metrics_snapshot` por contagem direta dos `work_items` da sprint mais recente de cada squad:
+- `bugsCreated` = work_items com `type === "Bug"`
+- `bugsResolved` = work_items com `type === "Bug"` e `state in ["Done", "Closed"]`
+- `bugRate` = bugsCreated > 0 ? `Math.round((bugsResolved / bugsCreated) * 100)` : 0
+- Inverter a semântica: mostrar **taxa de resolução** (não de criação), consistente com sprint
 
-## 2. Bugs — verificação dos dados
-Os dados estão corretos. A contagem de bugs vem de todos os work_items da sprint onde `type === "Bug"`. Backoffice Sprint 7 realmente tem 0 bugs no banco. Squads como "Arquitetura e Inovação" Sprint 6 têm 19 bugs. O KPI está funcionando — o valor 0/0 significa que não houve bugs nessa sprint.
+### 2. Completion Rate — adicionar ao dashboard
+Calcular `completionRate` global (itens Done/Closed vs total) da sprint mais recente de cada squad, igual à sprint:
+- Total de itens e concluídos (state in ["Done", "Closed"]) somados across squads
+- Exibir como subtitle no KPI de "Squads Monitoradas" ou como novo KPI
 
-Para melhorar a visibilidade, vou adicionar também o subtitle no KPI de Bugs mostrando a taxa de resolução quando houver bugs.
+### 3. Spillover — manter (já consistente)
+Já usa `work_items.is_spillover`, igual à sprint.
+
+### 4. Velocity e Commitment — manter (já consistente)
+Já usa `metrics_snapshot.completed_hours/planned_hours`, igual à sprint.
+
+## Mudanças em `src/pages/Index.tsx`
+
+### KPI de Bugs
+- Mudar label para "Bugs" com valor `bugsCreated/bugsResolved` (ex: "5/3")
+- Subtitle: taxa de resolução (ex: "60% resolvidos")
+- Variant: `bugsCreated === 0 ? "success" : bugsResolved >= bugsCreated ? "success" : "danger"`
+
+### KPI de Completion Rate
+- Adicionar subtitle no KPI "Squads Monitoradas" com `completionRate% entregue` ou trocar por um KPI dedicado de "Entrega"
+
+### Squad Table — adicionar coluna de bugs
+- Incluir `bugsCreated` e `bugsResolved` por squad no `squadTableData`
 
 ## Arquivos alterados
-- **`src/hooks/useSprintDetailData.ts`** — adicionar `completionRate` ao retorno
-- **`src/pages/Sprints.tsx`** — exibir `completionRate` como subtitle no KPI "Itens Concluídos" e melhorar subtitle do KPI de Bugs
+- **`src/hooks/useDashboardData.ts`** — recalcular bugs via work_items, adicionar completionRate global
+- **`src/pages/Index.tsx`** — atualizar KPIs de bugs e adicionar completion rate
 
