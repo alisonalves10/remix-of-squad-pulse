@@ -7,7 +7,8 @@ import {
   Settings, 
   Activity,
   TrendingUp,
-  LogOut
+  LogOut,
+  Map
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
@@ -35,6 +36,7 @@ const mainNavItems = [
   { title: "Sprints", url: "/sprints", icon: Calendar },
   { title: "Profissionais", url: "/professionals", icon: User },
   { title: "Ranking", url: "/ranking", icon: BarChart3 },
+  { title: "Roadmap", url: "/roadmap", icon: Map },
 ];
 
 const configNavItems = [

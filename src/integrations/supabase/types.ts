@@ -44,6 +44,27 @@ export type Database = {
         }
         Relationships: []
       }
+      business_units: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       metrics_snapshot: {
         Row: {
           bugs_created: number | null
@@ -97,6 +118,69 @@ export type Database = {
           },
           {
             foreignKeyName: "metrics_snapshot_squad_id_fkey"
+            columns: ["squad_id"]
+            isOneToOne: false
+            referencedRelation: "squads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roadmap_items: {
+        Row: {
+          business_unit_id: string | null
+          category: string
+          created_at: string
+          description: string | null
+          end_date: string | null
+          estimated_cost: number | null
+          id: string
+          invested_hours: number | null
+          priority: string
+          squad_id: string | null
+          start_date: string | null
+          status: string
+          title: string
+        }
+        Insert: {
+          business_unit_id?: string | null
+          category?: string
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          estimated_cost?: number | null
+          id?: string
+          invested_hours?: number | null
+          priority?: string
+          squad_id?: string | null
+          start_date?: string | null
+          status?: string
+          title: string
+        }
+        Update: {
+          business_unit_id?: string | null
+          category?: string
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          estimated_cost?: number | null
+          id?: string
+          invested_hours?: number | null
+          priority?: string
+          squad_id?: string | null
+          start_date?: string | null
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_items_business_unit_id_fkey"
+            columns: ["business_unit_id"]
+            isOneToOne: false
+            referencedRelation: "business_units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roadmap_items_squad_id_fkey"
             columns: ["squad_id"]
             isOneToOne: false
             referencedRelation: "squads"
@@ -173,6 +257,39 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "sprints_squad_id_fkey"
+            columns: ["squad_id"]
+            isOneToOne: false
+            referencedRelation: "squads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      squad_business_unit: {
+        Row: {
+          business_unit_id: string
+          id: string
+          squad_id: string
+        }
+        Insert: {
+          business_unit_id: string
+          id?: string
+          squad_id: string
+        }
+        Update: {
+          business_unit_id?: string
+          id?: string
+          squad_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "squad_business_unit_business_unit_id_fkey"
+            columns: ["business_unit_id"]
+            isOneToOne: false
+            referencedRelation: "business_units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "squad_business_unit_squad_id_fkey"
             columns: ["squad_id"]
             isOneToOne: false
             referencedRelation: "squads"
