@@ -64,7 +64,7 @@ export function SquadsTable({ squads, title = "Squads", description }: SquadsTab
             {squads.map((squad) => (
               <TableRow key={squad.id} className="group">
                 <TableCell className="font-medium">{squad.name}</TableCell>
-                <TableCell className="text-right font-mono">{squad.velocity} pts</TableCell>
+                <TableCell className="text-right font-mono"><TableCell className="text-right font-mono">{squad.velocity}h</TableCell></TableCell>
                 <TableCell className="text-right">{getCommitmentBadge(squad.commitment)}</TableCell>
                 <TableCell className="text-right">{getSpilloverBadge(squad.spillover)}</TableCell>
                 <TableCell className="text-right">{getBugsBadge(squad.bugsCreated ?? 0, squad.bugsResolved ?? 0)}</TableCell>

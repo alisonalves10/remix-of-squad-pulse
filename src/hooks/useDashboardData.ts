@@ -26,8 +26,11 @@ export function useDashboardData(selectedSquadId?: string | null) {
       const totalSquads = squads.length;
 
       const latestSprintBySquad = new Map<string, string>();
-      for (const sprint of sprints) {
-        latestSprintBySquad.set(sprint.squad_id, sprint.id);
+      for (const squad of squads) {
+        const closedSprints = sprints.filter(s => s.squad_id === squad.id && s.is_closed);
+        const fallback = sprints.filter(s => s.squad_id === squad.id);
+        const best = closedSprints.length > 0 ? closedSprints[closedSprints.length - 1] : fallback[fallback.length - 1];
+        if (best) latestSprintBySquad.set(squad.id, best.id);
       }
 
       const metricsByKey = new Map<string, typeof metrics[0]>();
