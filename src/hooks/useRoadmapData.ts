@@ -42,3 +42,16 @@ export function useRoadmapItems() {
     },
   });
 }
+
+export function useRoadmapItemSquads() {
+  return useQuery({
+    queryKey: ["roadmap_item_squads"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("roadmap_item_squads")
+        .select("*, squads(name)");
+      if (error) throw error;
+      return data;
+    },
+  });
+}
