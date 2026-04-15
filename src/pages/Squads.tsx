@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { KPICard } from "@/components/dashboard/KPICard";
+import { BurndownChart } from "@/components/dashboard/BurndownChart";
 import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { Link } from "react-router-dom";
 import { ArrowRight, TrendingUp, Target, Package, Bug, Loader2 } from "lucide-react";
@@ -12,8 +13,10 @@ import { useState, useMemo, useEffect } from "react";
 import { useSquads, useSprintsBySquad, useMetricsBySquad, useWorkItemsBySquad } from "@/hooks/useSquadsData";
 import { getCurrentSprint, isSprintActive, isSprintFuture } from "@/lib/sprint-utils";
 import { useExport } from "@/hooks/useExport";
-import { format } from "date-fns";
+import { format, eachDayOfInterval, parseISO } from "date-fns";
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from "recharts";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 const PIE_COLORS = [
   "hsl(var(--primary))",
@@ -41,6 +44,41 @@ const Squads = () => {
     return getCurrentSprint(sprints) || sprints[0];
   }, [sprints]);
 
+  // Fetch burndown data for current sprint
+  const { data: progressDaily } = useQuery({
+    queryKey: ["sprint_progress_daily", currentSprint?.id],
+    queryFn: async () => {
+      if (!currentSprint) return [];
+      const { data, error } = await supabase
+        .from("sprint_progress_daily")
+        .select("*")
+        .eq("sprint_id", currentSprint.id)
+        .order("date");
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!currentSprint?.id,
+  });
+
+  const burndownData = useMemo(() => {
+    if (!currentSprint || !progressDaily || progressDaily.length === 0) return [];
+    const start = parseISO(currentSprint.start_date);
+    const end = parseISO(currentSprint.end_date);
+    const days = eachDayOfInterval({ start, end });
+    const totalScope = progressDaily[0]?.total_scope_points || progressDaily[0]?.remaining_points || 0;
+    const idealDecrement = days.length > 1 ? Number(totalScope) / (days.length - 1) : 0;
+
+    return days.map((day, i) => {
+      const dateStr = format(day, "yyyy-MM-dd");
+      const snapshot = progressDaily.find(p => p.date === dateStr);
+      return {
+        date: format(day, "dd/MM"),
+        remaining: snapshot ? Number(snapshot.remaining_points) : null,
+        ideal: Math.max(0, Number(totalScope) - idealDecrement * i),
+      };
+    });
+  }, [currentSprint, progressDaily]);
+
   const nonFutureSprints = useMemo(() => {
     if (!sprints) return [];
     return sprints.filter(sp => !isSprintFuture(sp));
@@ -63,9 +101,10 @@ const Squads = () => {
   }, [workItems, currentSprint]);
 
   // Filter work items to selected sprint for table
+  const excludedTypes = ["Epic", "Feature"];
   const tableWorkItems = useMemo(() => {
     if (!workItems || !activeWorkItemsSprintId) return [];
-    return workItems.filter(wi => wi.sprint_id === activeWorkItemsSprintId);
+    return workItems.filter(wi => wi.sprint_id === activeWorkItemsSprintId && !excludedTypes.includes(wi.type));
   }, [workItems, activeWorkItemsSprintId]);
 
   // Compute KPIs from current sprint work items
@@ -248,6 +287,15 @@ const Squads = () => {
               </CardContent>
             </Card>
           </div>
+        )}
+
+        {/* Burndown Chart */}
+        {burndownData.length > 0 && currentSprint && (
+          <BurndownChart
+            data={burndownData}
+            title={`Burndown — ${currentSprint.name}`}
+            description="Remaining points ao longo da sprint"
+          />
         )}
 
         {/* Sprints Table */}
