@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import Squads from "./pages/Squads";
 import SprintDetail from "./pages/Sprints";
 import Professionals from "./pages/Professionals";
+import Ranking from "./pages/Ranking";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
@@ -30,6 +31,7 @@ const App = () => (
             <Route path="/sprints" element={<ProtectedRoute><SprintDetail /></ProtectedRoute>} />
             <Route path="/sprints/:id" element={<ProtectedRoute><SprintDetail /></ProtectedRoute>} />
             <Route path="/professionals" element={<ProtectedRoute><Professionals /></ProtectedRoute>} />
+            <Route path="/ranking" element={<ProtectedRoute><Ranking /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
