@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-export function useDashboardData(selectedSquadId?: string | null) {
+export function useDashboardData(selectedSquadId?: string | null, selectedSprintName?: string | null) {
   return useQuery({
-    queryKey: ["dashboard-data", selectedSquadId ?? "all"],
+    queryKey: ["dashboard-data", selectedSquadId ?? "all", selectedSprintName ?? "latest"],
     queryFn: async () => {
       const [squadsRes, sprintsRes, metricsRes, workItemsRes] = await Promise.all([
         supabase.from("squads").select("*").order("name"),
@@ -23,14 +23,31 @@ export function useDashboardData(selectedSquadId?: string | null) {
       const metrics = metricsRes.data.filter(m => !selectedSquadId || m.squad_id === selectedSquadId);
       const workItems = workItemsRes.data.filter(wi => !selectedSquadId || wi.squad_id === selectedSquadId);
 
+      // Collect unique sprint names for the filter (sorted by date desc)
+      const sprintNamesSet = new Map<string, string>();
+      for (const s of [...sprintsRes.data].sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime())) {
+        if (!sprintNamesSet.has(s.name)) {
+          sprintNamesSet.set(s.name, s.start_date);
+        }
+      }
+      const allSprintNames = [...sprintNamesSet.keys()];
+
       const totalSquads = squads.length;
 
-      const latestSprintBySquad = new Map<string, string>();
+      // Determine the target sprint per squad
+      const targetSprintBySquad = new Map<string, string>();
       for (const squad of squads) {
-        const closedSprints = sprints.filter(s => s.squad_id === squad.id && s.is_closed);
-        const fallback = sprints.filter(s => s.squad_id === squad.id);
-        const best = closedSprints.length > 0 ? closedSprints[closedSprints.length - 1] : fallback[fallback.length - 1];
-        if (best) latestSprintBySquad.set(squad.id, best.id);
+        if (selectedSprintName) {
+          // Find the sprint with this name for this squad
+          const match = sprints.find(s => s.squad_id === squad.id && s.name === selectedSprintName);
+          if (match) targetSprintBySquad.set(squad.id, match.id);
+        } else {
+          // Use latest closed sprint (fallback to latest)
+          const closedSprints = sprints.filter(s => s.squad_id === squad.id && s.is_closed);
+          const fallback = sprints.filter(s => s.squad_id === squad.id);
+          const best = closedSprints.length > 0 ? closedSprints[closedSprints.length - 1] : fallback[fallback.length - 1];
+          if (best) targetSprintBySquad.set(squad.id, best.id);
+        }
       }
 
       const metricsByKey = new Map<string, typeof metrics[0]>();
@@ -60,22 +77,21 @@ export function useDashboardData(selectedSquadId?: string | null) {
       const velocityBySquad: Array<{ name: string; velocity: number }> = [];
 
       for (const squad of squads) {
-        const latestSprintId = latestSprintBySquad.get(squad.id);
-        const m = latestSprintId ? metricsByKey.get(`${squad.id}_${latestSprintId}`) : undefined;
+        const targetSprintId = targetSprintBySquad.get(squad.id);
+        const m = targetSprintId ? metricsByKey.get(`${squad.id}_${targetSprintId}`) : undefined;
 
         const completed = Number((m as any)?.completed_hours ?? 0);
         const planned = Number((m as any)?.planned_hours ?? 0);
         const commitment = planned > 0 ? Math.round((completed / planned) * 100) : 0;
 
         const squadWorkItems = workItems.filter(
-          (wi) => wi.squad_id === squad.id && wi.sprint_id === latestSprintId
+          (wi) => wi.squad_id === squad.id && wi.sprint_id === targetSprintId
         );
         const totalItems = squadWorkItems.length;
         const completedItems = squadWorkItems.filter(wi => ["Done", "Closed"].includes(wi.state)).length;
         const spilloverItems = squadWorkItems.filter((wi) => wi.is_spillover).length;
         const spillover = totalItems > 0 ? Math.round((spilloverItems / totalItems) * 100) : 0;
 
-        // Bugs from work_items (consistent with sprint page)
         const bugsCreated = squadWorkItems.filter(wi => wi.type === "Bug").length;
         const bugsResolved = squadWorkItems.filter(wi => wi.type === "Bug" && ["Done", "Closed"].includes(wi.state)).length;
 
@@ -91,12 +107,15 @@ export function useDashboardData(selectedSquadId?: string | null) {
 
         const squadSprints = sprints.filter((s) => s.squad_id === squad.id);
         let trend: "up" | "down" | "stable" = "stable";
-        if (squadSprints.length >= 2) {
-          const prev = squadSprints[squadSprints.length - 2];
-          const prevM = metricsByKey.get(`${squad.id}_${prev.id}`);
-          const prevCompleted = Number((prevM as any)?.completed_hours ?? 0);
-          if (completed > prevCompleted) trend = "up";
-          else if (completed < prevCompleted) trend = "down";
+        if (targetSprintId) {
+          const targetIdx = squadSprints.findIndex(s => s.id === targetSprintId);
+          if (targetIdx > 0) {
+            const prev = squadSprints[targetIdx - 1];
+            const prevM = metricsByKey.get(`${squad.id}_${prev.id}`);
+            const prevCompleted = Number((prevM as any)?.completed_hours ?? 0);
+            if (completed > prevCompleted) trend = "up";
+            else if (completed < prevCompleted) trend = "down";
+          }
         }
 
         squadTableData.push({
@@ -116,8 +135,11 @@ export function useDashboardData(selectedSquadId?: string | null) {
       const avgVelocity = totalSquads > 0 ? Math.round(totalVelocity / totalSquads) : 0;
       const avgCommitment = commitmentCount > 0 ? Math.round(totalCommitment / commitmentCount) : 0;
 
-      const allSpillover = workItems.filter((wi) => wi.is_spillover).length;
-      const avgSpillover = workItems.length > 0 ? Math.round((allSpillover / workItems.length) * 100) : 0;
+      // Spillover only from target sprints
+      const targetSprintIds = new Set(targetSprintBySquad.values());
+      const targetWorkItems = workItems.filter(wi => targetSprintIds.has(wi.sprint_id));
+      const allSpillover = targetWorkItems.filter((wi) => wi.is_spillover).length;
+      const avgSpillover = targetWorkItems.length > 0 ? Math.round((allSpillover / targetWorkItems.length) * 100) : 0;
 
       const bugResolutionRate =
         globalBugsCreated > 0
@@ -149,6 +171,7 @@ export function useDashboardData(selectedSquadId?: string | null) {
         velocityTrend,
         squadTableData,
         allSquads,
+        allSprintNames,
       };
     },
   });

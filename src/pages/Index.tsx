@@ -14,7 +14,8 @@ import { useState } from "react";
 const Index = () => {
   const { exportToPDF, exportToExcel } = useExport();
   const [selectedSquadId, setSelectedSquadId] = useState<string | null>(null);
-  const { data, isLoading } = useDashboardData(selectedSquadId);
+  const [selectedSprintName, setSelectedSprintName] = useState<string | null>(null);
+  const { data, isLoading } = useDashboardData(selectedSquadId, selectedSprintName);
 
   const {
     totalSquads = 0,
@@ -29,6 +30,7 @@ const Index = () => {
     velocityTrend = [],
     squadTableData = [],
     allSquads = [],
+    allSprintNames = [],
   } = data ?? {};
 
   const exportConfig = {
