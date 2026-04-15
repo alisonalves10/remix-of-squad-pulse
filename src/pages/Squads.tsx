@@ -8,7 +8,7 @@ import { KPICard } from "@/components/dashboard/KPICard";
 import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { Link } from "react-router-dom";
 import { ArrowRight, TrendingUp, Target, Package, Bug, Loader2 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useSquads, useSprintsBySquad, useMetricsBySquad, useWorkItemsBySquad } from "@/hooks/useSquadsData";
 import { getCurrentSprint, isSprintActive, isSprintFuture } from "@/lib/sprint-utils";
 import { useExport } from "@/hooks/useExport";
@@ -41,11 +41,32 @@ const Squads = () => {
     return getCurrentSprint(sprints) || sprints[0];
   }, [sprints]);
 
-  // Filter work items to current sprint only
+  const nonFutureSprints = useMemo(() => {
+    if (!sprints) return [];
+    return sprints.filter(sp => !isSprintFuture(sp));
+  }, [sprints]);
+
+  const [selectedWorkItemsSprintId, setSelectedWorkItemsSprintId] = useState<string>("");
+
+  // Reset selected sprint when squad changes
+  useEffect(() => {
+    setSelectedWorkItemsSprintId(currentSprint?.id || "");
+  }, [currentSprint?.id]);
+
+  const activeWorkItemsSprintId = selectedWorkItemsSprintId || currentSprint?.id || "";
+  const activeWorkItemsSprint = sprints?.find(s => s.id === activeWorkItemsSprintId);
+
+  // Filter work items to current sprint for KPIs/charts
   const currentWorkItems = useMemo(() => {
     if (!workItems || !currentSprint) return [];
     return workItems.filter(wi => wi.sprint_id === currentSprint.id);
   }, [workItems, currentSprint]);
+
+  // Filter work items to selected sprint for table
+  const tableWorkItems = useMemo(() => {
+    if (!workItems || !activeWorkItemsSprintId) return [];
+    return workItems.filter(wi => wi.sprint_id === activeWorkItemsSprintId);
+  }, [workItems, activeWorkItemsSprintId]);
 
   // Compute KPIs from current sprint work items
   const kpis = useMemo(() => {
@@ -187,9 +208,9 @@ const Squads = () => {
               </CardHeader>
               <CardContent>
                 {byTypeData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={320}>
                     <PieChart>
-                      <Pie data={byTypeData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={({ name, value }) => `${name}: ${value}`}>
+                      <Pie data={byTypeData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={110} label={({ value }) => value}>
                         {byTypeData.map((_, i) => (
                           <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                         ))}
@@ -210,9 +231,9 @@ const Squads = () => {
               </CardHeader>
               <CardContent>
                 {byStateData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={320}>
                     <PieChart>
-                      <Pie data={byStateData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={({ name, value }) => `${name}: ${value}`}>
+                      <Pie data={byStateData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={110} label={({ value }) => value}>
                         {byStateData.map((_, i) => (
                           <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                         ))}
@@ -288,14 +309,32 @@ const Squads = () => {
           </CardContent>
         </Card>
 
-        {/* Work Items Table — Current Sprint Only */}
-        {currentWorkItems.length > 0 && (
-          <Card className="shadow-card">
-            <CardHeader>
-              <CardTitle className="text-lg">Work Items — {currentSprint?.name || "Sprint Corrente"}</CardTitle>
-              <CardDescription>{currentWorkItems.length} itens na sprint atual</CardDescription>
-            </CardHeader>
-            <CardContent>
+        {/* Work Items Table — With Sprint Filter */}
+        <Card className="shadow-card">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">Work Items — {activeWorkItemsSprint?.name || "Sprint"}</CardTitle>
+                <CardDescription>{tableWorkItems.length} itens na sprint selecionada</CardDescription>
+              </div>
+              <Select value={activeWorkItemsSprintId} onValueChange={setSelectedWorkItemsSprintId}>
+                <SelectTrigger className="w-[220px]">
+                  <SelectValue placeholder="Selecionar sprint" />
+                </SelectTrigger>
+                <SelectContent>
+                  {nonFutureSprints.map((sp) => (
+                    <SelectItem key={sp.id} value={sp.id}>
+                      {sp.name} {isSprintActive(sp) ? "(atual)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {tableWorkItems.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">Nenhum work item nesta sprint.</p>
+            ) : (
               <div className="max-h-[500px] overflow-auto">
                 <Table>
                   <TableHeader>
@@ -307,7 +346,7 @@ const Squads = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {currentWorkItems.map((wi) => (
+                    {tableWorkItems.map((wi) => (
                       <TableRow key={wi.id}>
                         <TableCell className="font-mono text-sm text-muted-foreground">{wi.id}</TableCell>
                         <TableCell>
@@ -334,9 +373,9 @@ const Squads = () => {
                   </TableBody>
                 </Table>
               </div>
-            </CardContent>
-          </Card>
-        )}
+            )}
+          </CardContent>
+        </Card>
       </div>
     </AppLayout>
   );

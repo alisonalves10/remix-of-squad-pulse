@@ -23,6 +23,10 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { getCurrentSprint } from "@/lib/sprint-utils";
 
 const mainNavItems = [
   { title: "Dashboard Geral", url: "/", icon: LayoutDashboard },
@@ -37,6 +41,22 @@ const configNavItems = [
 
 export function AppSidebar() {
   const { user, signOut } = useAuth();
+
+  const { data: activeSprint } = useQuery({
+    queryKey: ["active-sprint-sidebar"],
+    queryFn: async () => {
+      const today = new Date().toISOString().split("T")[0];
+      const { data } = await supabase
+        .from("sprints")
+        .select("name, start_date, end_date")
+        .lte("start_date", today)
+        .gte("end_date", today)
+        .limit(1);
+      if (data && data.length > 0) return data[0];
+      return null;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
   return (
     <Sidebar className="border-r border-sidebar-border">
@@ -104,6 +124,15 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-4">
+        {activeSprint && (
+          <div className="flex items-center gap-2 mb-3 px-1">
+            <Calendar className="h-3.5 w-3.5 text-primary" />
+            <span className="text-xs font-medium text-sidebar-foreground/80 truncate">{activeSprint.name}</span>
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-primary/30 text-primary">
+              Ativa
+            </Badge>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs text-sidebar-foreground/50">
             <TrendingUp className="h-3 w-3" />

@@ -19,7 +19,7 @@ const Index = () => {
 
   const {
     totalSquads = 0,
-    avgVelocity = 0,
+    totalHoursLogged = 0,
     avgCommitment = 0,
     avgSpillover = 0,
     globalBugsCreated = 0,
@@ -117,9 +117,9 @@ const Index = () => {
             variant="default"
           />
           <KPICard
-            title="Velocidade Média"
-            value={`${avgVelocity}h`}
-            subtitle="Horas por sprint"
+            title="Horas Lançadas"
+            value={`${totalHoursLogged}h`}
+            subtitle="Total na sprint selecionada"
             icon={TrendingUp}
             variant="success"
           />
