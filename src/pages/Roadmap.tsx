@@ -54,6 +54,18 @@ const CATEGORY_MAP: Record<string, string> = {
 
 const Roadmap = () => {
   const { exportToPDF, exportToExcel } = useExport();
+
+  const exportConfig = {
+    title: "Roadmap Executivo",
+    columns: [
+      { header: "Título", key: "title" },
+      { header: "Status", key: "status" },
+      { header: "Prioridade", key: "priority" },
+      { header: "Categoria", key: "category" },
+      { header: "Custo (R$)", key: "estimated_cost" },
+    ],
+    filename: "roadmap",
+  };
   const { data: items, isLoading: itemsLoading } = useRoadmapItems();
   const { data: businessUnits, isLoading: buLoading } = useBusinessUnits();
   const { data: squads } = useSquads();
