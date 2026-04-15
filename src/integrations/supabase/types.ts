@@ -125,6 +125,42 @@ export type Database = {
           },
         ]
       }
+      roadmap_item_squads: {
+        Row: {
+          cost_share: number
+          id: string
+          roadmap_item_id: string
+          squad_id: string
+        }
+        Insert: {
+          cost_share?: number
+          id?: string
+          roadmap_item_id: string
+          squad_id: string
+        }
+        Update: {
+          cost_share?: number
+          id?: string
+          roadmap_item_id?: string
+          squad_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_item_squads_roadmap_item_id_fkey"
+            columns: ["roadmap_item_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roadmap_item_squads_squad_id_fkey"
+            columns: ["squad_id"]
+            isOneToOne: false
+            referencedRelation: "squads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       roadmap_items: {
         Row: {
           business_unit_id: string | null
