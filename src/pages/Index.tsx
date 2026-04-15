@@ -89,6 +89,20 @@ const Index = () => {
               ))}
             </SelectContent>
           </Select>
+          <Select
+            value={selectedSprintName ?? "latest"}
+            onValueChange={(val) => setSelectedSprintName(val === "latest" ? null : val)}
+          >
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Filtrar por sprint" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="latest">Última Sprint Fechada</SelectItem>
+              {allSprintNames.map((name) => (
+                <SelectItem key={name} value={name}>{name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <ExportButtons onExportPDF={handleExportPDF} onExportExcel={handleExportExcel} />
         </div>
       }
