@@ -133,6 +133,7 @@ const SprintDetail = () => {
     plannedHours,
     completedHours,
     commitment,
+    completionRate,
     types,
     states,
     burndownData,
@@ -292,6 +293,7 @@ const SprintDetail = () => {
           <KPICard
             title="Itens Concluídos"
             value={completedItems}
+            subtitle={`${completionRate}% concluídos`}
             icon={CheckCircle}
             variant="success"
           />
@@ -319,9 +321,9 @@ const SprintDetail = () => {
           <KPICard
             title="Bugs"
             value={`${bugsResolved}/${bugsCreated}`}
-            subtitle="Resolvidos / Criados"
+            subtitle={bugsCreated > 0 ? `${Math.round((bugsResolved / bugsCreated) * 100)}% resolvidos` : "Nenhum bug na sprint"}
             icon={Bug}
-            variant={bugsResolved >= bugsCreated ? "success" : "danger"}
+            variant={bugsCreated === 0 ? "default" : bugsResolved >= bugsCreated ? "success" : "danger"}
           />
         </div>
 

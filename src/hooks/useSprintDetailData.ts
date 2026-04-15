@@ -164,6 +164,7 @@ export function useSprintDetailData(sprintId?: string) {
       const plannedHours = Number(metrics?.planned_hours ?? 0);
       const completedHours = Number(metrics?.completed_hours ?? 0);
       const commitment = plannedHours > 0 ? Math.round((completedHours / plannedHours) * 100) : 0;
+      const completionRate = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
 
       // Get unique types and states for filters (only operational types for the work items table)
       const operationalTypes = ["Task", "Bug", "Issue", "Speed"];
@@ -278,6 +279,7 @@ export function useSprintDetailData(sprintId?: string) {
         plannedHours,
         completedHours,
         commitment,
+        completionRate,
         types,
         states,
         burndownData,
