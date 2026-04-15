@@ -1,38 +1,20 @@
 
 
-# Fix: Spillover nunca é detectado (bug na referência do IterationPath)
+# Melhorias na página de Sprint
 
-## Problema identificado
-Na função `syncToDatabase` (linha 395), o `iterPath` usado para detectar spillover vem do **primeiro work item retornado**:
+## 1. Visão Gerencial com Collapse
+Envolver o card da Visão Gerencial em um `Collapsible` (já importado) com estado inicial aberto, permitindo minimizar/expandir clicando no header. O ícone alterna entre `ChevronDown` e `ChevronRight`.
 
-```typescript
-const currentIterPath = workItems[0].fields["System.IterationPath"];
-const iterPath = currentIterPath || "Unknown";
-```
+## 2. Coluna Parent com ID numérico
+Na tabela de Work Items, trocar o conteúdo da coluna "US/Parent" para exibir o **ID numérico** do parent (ex: `#52497`) em vez do título. Renomear o header para "Parent".
 
-Para sprints fechadas com `asOf`, o WIQL encontra itens que estavam na sprint naquela data. Mas `fetchWorkItemDetails` retorna os campos **atuais** (sem asOf). Se o primeiro item da lista foi movido para Sprint 8, `iterPath` vira o path da Sprint 8, e **todos os itens** parecem ter o mesmo path → `isSpillover = false` para todos. Pior: a sprint lookup (`azure_iteration_path = iterPath`) pode encontrar/criar a sprint errada.
+## 3. Ordenar por Parent
+Ordenar `filteredItems` por `parent_id` (nulls por último), agrupando visualmente os itens que pertencem ao mesmo parent.
 
-## Solução
-Usar `currentIteration.path` (que contém o path correto da sprint sendo sincronizada) como referência para spillover, em vez do primeiro work item:
-
-```typescript
-// ANTES (bugado):
-const currentIterPath = workItems[0].fields["System.IterationPath"];
-const iterPath = currentIterPath || "Unknown";
-
-// DEPOIS (correto):
-const iterPath = currentIteration?.path || 
-  (workItems.length > 0 ? workItems[0].fields["System.IterationPath"] : null) || 
-  "Unknown";
-```
-
-Isso garante que:
-1. A sprint correta seja encontrada/criada no banco
-2. Itens com IterationPath diferente (movidos para outra sprint) sejam marcados como spillover
-
-## Arquivo alterado
-- `supabase/functions/azure-sync/index.ts` — linhas 395-409: priorizar `currentIteration.path`
-
-## Após implementação
-Re-sincronizar todas as squads via "Carregar Histórico 2026" para que o spillover seja detectado corretamente.
+## Arquivos alterados
+- **`src/pages/Sprints.tsx`**:
+  - Adicionar estado `const [isGerencialOpen, setIsGerencialOpen] = useState(true)` 
+  - Envolver o card da Visão Gerencial em `Collapsible` com trigger no header
+  - Na coluna Parent: mostrar `item.parent_id` formatado como `#ID` em vez de `parent_title`
+  - Ordenar `filteredItems` por `parent_id` ascendente (nulls last)
 
