@@ -4,7 +4,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, TrendingUp, TrendingDown } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 interface Squad {
   id: string;
@@ -13,6 +12,8 @@ interface Squad {
   commitment: number;
   spillover: number;
   trend: "up" | "down" | "stable";
+  bugsCreated?: number;
+  bugsResolved?: number;
 }
 
 interface SquadsTableProps {
@@ -34,6 +35,12 @@ export function SquadsTable({ squads, title = "Squads", description }: SquadsTab
     return <Badge className="bg-destructive/10 text-destructive border-destructive/20">{value}%</Badge>;
   };
 
+  const getBugsBadge = (created: number, resolved: number) => {
+    if (created === 0) return <Badge className="bg-success/10 text-success border-success/20">0</Badge>;
+    if (resolved >= created) return <Badge className="bg-success/10 text-success border-success/20">{created}/{resolved}</Badge>;
+    return <Badge className="bg-destructive/10 text-destructive border-destructive/20">{created}/{resolved}</Badge>;
+  };
+
   return (
     <Card className="shadow-card animate-slide-up">
       <CardHeader>
@@ -48,6 +55,7 @@ export function SquadsTable({ squads, title = "Squads", description }: SquadsTab
               <TableHead className="text-right">Velocidade Média</TableHead>
               <TableHead className="text-right">Comprometimento</TableHead>
               <TableHead className="text-right">Spillover</TableHead>
+              <TableHead className="text-right">Bugs</TableHead>
               <TableHead className="text-center">Tendência</TableHead>
               <TableHead className="text-right"></TableHead>
             </TableRow>
@@ -59,6 +67,7 @@ export function SquadsTable({ squads, title = "Squads", description }: SquadsTab
                 <TableCell className="text-right font-mono">{squad.velocity} pts</TableCell>
                 <TableCell className="text-right">{getCommitmentBadge(squad.commitment)}</TableCell>
                 <TableCell className="text-right">{getSpilloverBadge(squad.spillover)}</TableCell>
+                <TableCell className="text-right">{getBugsBadge(squad.bugsCreated ?? 0, squad.bugsResolved ?? 0)}</TableCell>
                 <TableCell className="text-center">
                   {squad.trend === "up" ? (
                     <TrendingUp className="h-4 w-4 text-success inline" />

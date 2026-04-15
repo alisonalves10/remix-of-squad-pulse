@@ -38,8 +38,10 @@ export function useDashboardData(selectedSquadId?: string | null) {
       let totalVelocity = 0;
       let totalCommitment = 0;
       let commitmentCount = 0;
-      let totalBugsCreated = 0;
-      let totalBugsResolved = 0;
+      let globalBugsCreated = 0;
+      let globalBugsResolved = 0;
+      let globalTotalItems = 0;
+      let globalCompletedItems = 0;
 
       const squadTableData: Array<{
         id: string;
@@ -48,6 +50,8 @@ export function useDashboardData(selectedSquadId?: string | null) {
         commitment: number;
         spillover: number;
         trend: "up" | "down" | "stable";
+        bugsCreated: number;
+        bugsResolved: number;
       }> = [];
 
       const velocityBySquad: Array<{ name: string; velocity: number }> = [];
@@ -64,16 +68,23 @@ export function useDashboardData(selectedSquadId?: string | null) {
           (wi) => wi.squad_id === squad.id && wi.sprint_id === latestSprintId
         );
         const totalItems = squadWorkItems.length;
+        const completedItems = squadWorkItems.filter(wi => ["Done", "Closed"].includes(wi.state)).length;
         const spilloverItems = squadWorkItems.filter((wi) => wi.is_spillover).length;
         const spillover = totalItems > 0 ? Math.round((spilloverItems / totalItems) * 100) : 0;
+
+        // Bugs from work_items (consistent with sprint page)
+        const bugsCreated = squadWorkItems.filter(wi => wi.type === "Bug").length;
+        const bugsResolved = squadWorkItems.filter(wi => wi.type === "Bug" && ["Done", "Closed"].includes(wi.state)).length;
 
         totalVelocity += completed;
         if (planned > 0) {
           totalCommitment += commitment;
           commitmentCount++;
         }
-        totalBugsCreated += Number(m?.bugs_created ?? 0);
-        totalBugsResolved += Number(m?.bugs_resolved ?? 0);
+        globalBugsCreated += bugsCreated;
+        globalBugsResolved += bugsResolved;
+        globalTotalItems += totalItems;
+        globalCompletedItems += completedItems;
 
         const squadSprints = sprints.filter((s) => s.squad_id === squad.id);
         let trend: "up" | "down" | "stable" = "stable";
@@ -92,6 +103,8 @@ export function useDashboardData(selectedSquadId?: string | null) {
           commitment,
           spillover,
           trend,
+          bugsCreated,
+          bugsResolved,
         });
 
         velocityBySquad.push({ name: squad.name, velocity: completed });
@@ -103,10 +116,14 @@ export function useDashboardData(selectedSquadId?: string | null) {
       const allSpillover = workItems.filter((wi) => wi.is_spillover).length;
       const avgSpillover = workItems.length > 0 ? Math.round((allSpillover / workItems.length) * 100) : 0;
 
-      const bugRate =
-        totalBugsCreated + totalBugsResolved > 0
-          ? Math.round((totalBugsCreated / (totalBugsCreated + totalBugsResolved)) * 100)
+      const bugResolutionRate =
+        globalBugsCreated > 0
+          ? Math.round((globalBugsResolved / globalBugsCreated) * 100)
           : 0;
+
+      const completionRate = globalTotalItems > 0
+        ? Math.round((globalCompletedItems / globalTotalItems) * 100)
+        : 0;
 
       const sprintOrder = [...new Map(sprints.map((s) => [s.name, s])).values()];
       const velocityTrend = sprintOrder.map((sprint) => {
@@ -121,7 +138,10 @@ export function useDashboardData(selectedSquadId?: string | null) {
         avgVelocity,
         avgCommitment,
         avgSpillover,
-        bugRate,
+        globalBugsCreated,
+        globalBugsResolved,
+        bugResolutionRate,
+        completionRate,
         velocityBySquad,
         velocityTrend,
         squadTableData,
