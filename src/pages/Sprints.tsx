@@ -31,6 +31,7 @@ const SprintDetail = () => {
   const [stateFilter, setStateFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isGerencialOpen, setIsGerencialOpen] = useState(true);
 
   const { data, isLoading } = useSprintDetailData(id);
 
@@ -138,14 +139,20 @@ const SprintDetail = () => {
     burnupData,
   } = data;
 
-  const filteredItems = workItems.filter((item) => {
-    const matchesType = typeFilter === "all" || item.type === typeFilter;
-    const matchesState = stateFilter === "all" || item.state === stateFilter;
-    const matchesSearch =
-      item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.id.toString().includes(searchTerm);
-    return matchesType && matchesState && matchesSearch;
-  });
+  const filteredItems = workItems
+    .filter((item) => {
+      const matchesType = typeFilter === "all" || item.type === typeFilter;
+      const matchesState = stateFilter === "all" || item.state === stateFilter;
+      const matchesSearch =
+        item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.id.toString().includes(searchTerm);
+      return matchesType && matchesState && matchesSearch;
+    })
+    .sort((a, b) => {
+      const idA = a.parent_id ?? Number.MAX_SAFE_INTEGER;
+      const idB = b.parent_id ?? Number.MAX_SAFE_INTEGER;
+      return idA - idB;
+    });
 
   const getTypeBadge = (type: string) => {
     const styles: Record<string, string> = {
@@ -336,22 +343,29 @@ const SprintDetail = () => {
 
         {/* Hierarchy Panel - Management View */}
         {hierarchyTree && hierarchyTree.length > 0 && (
-          <Card className="shadow-card">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Layers className="h-5 w-5 text-primary" />
-                Visão Gerencial — Épicos, Features e User Stories
-              </CardTitle>
-              <CardDescription>
-                Hierarquia de itens sendo trabalhados nesta sprint
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {hierarchyTree.map((node: any) => (
-                <HierarchyNode key={node.item.id} node={node} level={0} getTypeBadge={getTypeBadge} getStateBadge={getStateBadge} />
-              ))}
-            </CardContent>
-          </Card>
+          <Collapsible open={isGerencialOpen} onOpenChange={setIsGerencialOpen}>
+            <Card className="shadow-card">
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer hover:bg-muted/30 transition-colors">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    {isGerencialOpen ? <ChevronDown className="h-5 w-5 text-muted-foreground" /> : <ChevronRight className="h-5 w-5 text-muted-foreground" />}
+                    <Layers className="h-5 w-5 text-primary" />
+                    Visão Gerencial — Épicos, Features e User Stories
+                  </CardTitle>
+                  <CardDescription>
+                    Hierarquia de itens sendo trabalhados nesta sprint
+                  </CardDescription>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="space-y-2">
+                  {hierarchyTree.map((node: any) => (
+                    <HierarchyNode key={node.item.id} node={node} level={0} getTypeBadge={getTypeBadge} getStateBadge={getStateBadge} />
+                  ))}
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
         )}
 
         {/* Work Items Table */}
@@ -405,7 +419,7 @@ const SprintDetail = () => {
                      <TableHead>ID</TableHead>
                      <TableHead>Tipo</TableHead>
                      <TableHead>Título</TableHead>
-                     <TableHead>US/Parent</TableHead>
+                     <TableHead>Parent</TableHead>
                      <TableHead>Responsável</TableHead>
                      <TableHead>Estado</TableHead>
                      <TableHead className="text-right">Estimativa (h)</TableHead>
@@ -420,14 +434,9 @@ const SprintDetail = () => {
                       <TableCell className="font-mono text-sm">{item.id}</TableCell>
                       <TableCell>{getTypeBadge(item.type)}</TableCell>
                        <TableCell className="max-w-[300px] truncate">{item.title}</TableCell>
-                       <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">
-                         {(item as any).parent_title ? (
-                           <span className="flex items-center gap-1">
-                             <BookOpen className="h-3 w-3 shrink-0" />
-                             {(item as any).parent_title}
-                           </span>
-                         ) : "—"}
-                       </TableCell>
+                       <TableCell className="text-sm font-mono text-muted-foreground">
+                         {item.parent_id ? `#${item.parent_id}` : "—"}
+                        </TableCell>
                        <TableCell className="text-sm">{(item as any).assigned_to_name || "—"}</TableCell>
                        <TableCell>{getStateBadge(item.state)}</TableCell>
                        <TableCell className="text-right font-mono">
