@@ -305,7 +305,7 @@ const Roadmap = () => {
           <KPICard
             title="Concluídas"
             value={doneCount}
-            subtitle={`de ${filteredItems.length} iniciativas`}
+            subtitle={`de ${filteredItems.length} demandas`}
             icon={CheckCircle2}
           />
           <KPICard
