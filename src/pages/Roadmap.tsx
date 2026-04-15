@@ -6,9 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { ExportButtons } from "@/components/dashboard/ExportButtons";
-import { useBusinessUnits, useRoadmapItems, useSquadBusinessUnits } from "@/hooks/useRoadmapData";
+import { useBusinessUnits, useRoadmapItems, useSquadBusinessUnits, useRoadmapItemSquads } from "@/hooks/useRoadmapData";
 import { useExport } from "@/hooks/useExport";
-import { Loader2, DollarSign, Rocket, CheckCircle2, AlertTriangle, Plus } from "lucide-react";
+import { Loader2, DollarSign, Rocket, CheckCircle2, AlertTriangle, Plus, X } from "lucide-react";
 import { useState, useMemo } from "react";
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -70,6 +71,7 @@ const Roadmap = () => {
   const { data: businessUnits, isLoading: buLoading } = useBusinessUnits();
   const { data: squads } = useSquads();
   const { data: squadBU } = useSquadBusinessUnits();
+  const { data: itemSquads } = useRoadmapItemSquads();
   const queryClient = useQueryClient();
 
   const [filterBU, setFilterBU] = useState("all");
@@ -79,16 +81,60 @@ const Roadmap = () => {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [addBUDialogOpen, setAddBUDialogOpen] = useState(false);
 
+  // Multi-squad form state
+  const [selectedSquads, setSelectedSquads] = useState<Record<string, number>>({});
+
+  const toggleSquad = (squadId: string) => {
+    setSelectedSquads(prev => {
+      const next = { ...prev };
+      if (next[squadId] !== undefined) {
+        delete next[squadId];
+      } else {
+        next[squadId] = 0;
+      }
+      return next;
+    });
+  };
+
+  const updateSquadCost = (squadId: string, value: number) => {
+    setSelectedSquads(prev => ({ ...prev, [squadId]: value }));
+  };
+
+  const totalRateado = useMemo(() => Object.values(selectedSquads).reduce((s, v) => s + v, 0), [selectedSquads]);
+
+  // Build a map: itemId -> squads with cost_share
+  const itemSquadsMap = useMemo(() => {
+    const map: Record<string, Array<{ squad_id: string; squad_name: string; cost_share: number }>> = {};
+    if (!itemSquads) return map;
+    for (const is of itemSquads) {
+      if (!map[is.roadmap_item_id]) map[is.roadmap_item_id] = [];
+      map[is.roadmap_item_id].push({
+        squad_id: is.squad_id,
+        squad_name: (is as any).squads?.name || "—",
+        cost_share: Number(is.cost_share) || 0,
+      });
+    }
+    return map;
+  }, [itemSquads]);
+
   const filteredItems = useMemo(() => {
     if (!items) return [];
     return items.filter(item => {
       if (filterBU !== "all" && item.business_unit_id !== filterBU) return false;
       if (filterStatus !== "all" && item.status !== filterStatus) return false;
       if (filterCategory !== "all" && item.category !== filterCategory) return false;
-      if (filterSquad !== "all" && item.squad_id !== filterSquad) return false;
+      if (filterSquad !== "all") {
+        // Check junction table first, fallback to legacy squad_id
+        const squadsForItem = itemSquadsMap[item.id];
+        if (squadsForItem && squadsForItem.length > 0) {
+          if (!squadsForItem.some(s => s.squad_id === filterSquad)) return false;
+        } else if (item.squad_id !== filterSquad) {
+          return false;
+        }
+      }
       return true;
     });
-  }, [items, filterBU, filterStatus, filterCategory, filterSquad]);
+  }, [items, filterBU, filterStatus, filterCategory, filterSquad, itemSquadsMap]);
 
   // KPIs
   const totalInvested = useMemo(() => filteredItems.reduce((s, i) => s + (i.estimated_cost || 0), 0), [filteredItems]);
@@ -124,17 +170,30 @@ const Roadmap = () => {
     });
   }, [businessUnits, items]);
 
-  // By Squad
+  // By Squad — use cost_share from junction table
   const squadData = useMemo(() => {
     if (!squads) return [];
     return squads.map(sq => {
-      const sqItems = (items || []).filter(i => i.squad_id === sq.id);
-      const total = sqItems.length;
-      const cost = sqItems.reduce((s, i) => s + (i.estimated_cost || 0), 0);
-      const hours = sqItems.reduce((s, i) => s + (i.invested_hours || 0), 0);
+      // Sum cost_share from junction table for this squad
+      let junctionCost = 0;
+      let junctionCount = 0;
+      if (itemSquads) {
+        for (const is of itemSquads) {
+          if (is.squad_id === sq.id) {
+            junctionCost += Number(is.cost_share) || 0;
+            junctionCount++;
+          }
+        }
+      }
+      // Also count legacy items without junction entries
+      const legacyItems = (items || []).filter(i => i.squad_id === sq.id && !(itemSquadsMap[i.id]?.length));
+      const legacyCost = legacyItems.reduce((s, i) => s + (i.estimated_cost || 0), 0);
+      const total = junctionCount + legacyItems.length;
+      const cost = junctionCost + legacyCost;
+      const hours = legacyItems.reduce((s, i) => s + (i.invested_hours || 0), 0);
       return { name: sq.name, total, cost, hours };
     }).filter(s => s.total > 0);
-  }, [squads, items]);
+  }, [squads, items, itemSquads, itemSquadsMap]);
 
   // Timeline data
   const timelineData = useMemo(() => {
@@ -152,25 +211,47 @@ const Roadmap = () => {
   const handleAddItem = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    const { error } = await supabase.from("roadmap_items").insert({
+    const estimatedCost = Number(fd.get("estimated_cost")) || 0;
+
+    const { data: newItem, error } = await supabase.from("roadmap_items").insert({
       title: fd.get("title") as string,
       description: fd.get("description") as string || null,
       business_unit_id: (fd.get("business_unit_id") as string) || null,
-      squad_id: (fd.get("squad_id") as string) || null,
+      squad_id: null, // legacy field — use junction table
       status: fd.get("status") as string,
       priority: fd.get("priority") as string,
       start_date: (fd.get("start_date") as string) || null,
       end_date: (fd.get("end_date") as string) || null,
-      estimated_cost: Number(fd.get("estimated_cost")) || 0,
+      estimated_cost: estimatedCost,
       category: fd.get("category") as string,
-    });
-    if (error) {
+    }).select("id").single();
+
+    if (error || !newItem) {
       toast.error("Erro ao adicionar demanda");
       return;
     }
+
+    // Insert squad cost shares
+    const squadEntries = Object.entries(selectedSquads);
+    if (squadEntries.length > 0) {
+      const { error: sqError } = await supabase.from("roadmap_item_squads").insert(
+        squadEntries.map(([squad_id, cost_share]) => ({
+          roadmap_item_id: newItem.id,
+          squad_id,
+          cost_share,
+        }))
+      );
+      if (sqError) {
+        toast.error("Erro ao salvar rateio de squads");
+        return;
+      }
+    }
+
     toast.success("Demanda adicionada");
     queryClient.invalidateQueries({ queryKey: ["roadmap_items"] });
+    queryClient.invalidateQueries({ queryKey: ["roadmap_item_squads"] });
     setAddDialogOpen(false);
+    setSelectedSquads({});
   };
 
   const handleAddBU = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -187,6 +268,18 @@ const Roadmap = () => {
     toast.success("Unidade de negócio adicionada");
     queryClient.invalidateQueries({ queryKey: ["business_units"] });
     setAddBUDialogOpen(false);
+  };
+
+  // Helper to get squads for a given item
+  const getSquadsForItem = (itemId: string, legacySquadName?: string) => {
+    const junctionSquads = itemSquadsMap[itemId];
+    if (junctionSquads && junctionSquads.length > 0) {
+      return junctionSquads;
+    }
+    if (legacySquadName) {
+      return [{ squad_id: "", squad_name: legacySquadName, cost_share: 0 }];
+    }
+    return [];
   };
 
   if (isLoading) {
@@ -222,11 +315,11 @@ const Roadmap = () => {
                 </form>
               </DialogContent>
             </Dialog>
-            <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+            <Dialog open={addDialogOpen} onOpenChange={(open) => { setAddDialogOpen(open); if (!open) setSelectedSquads({}); }}>
               <DialogTrigger asChild>
                 <Button size="sm"><Plus className="h-4 w-4 mr-1" />Demanda</Button>
               </DialogTrigger>
-              <DialogContent className="max-w-lg">
+              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Nova Demanda</DialogTitle></DialogHeader>
                 <form onSubmit={handleAddItem} className="space-y-3">
                   <div><Label>Título</Label><Input name="title" required /></div>
@@ -240,10 +333,9 @@ const Roadmap = () => {
                       </select>
                     </div>
                     <div>
-                      <Label>Squad</Label>
-                      <select name="squad_id" className="w-full border rounded-md px-3 py-2 text-sm bg-background">
-                        <option value="">Nenhuma</option>
-                        {squads?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      <Label>Categoria</Label>
+                      <select name="category" className="w-full border rounded-md px-3 py-2 text-sm bg-background">
+                        {Object.entries(CATEGORY_MAP).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                       </select>
                     </div>
                   </div>
@@ -263,20 +355,51 @@ const Roadmap = () => {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label>Categoria</Label>
-                      <select name="category" className="w-full border rounded-md px-3 py-2 text-sm bg-background">
-                        {Object.entries(CATEGORY_MAP).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                      </select>
-                    </div>
-                    <div>
                       <Label>Custo Estimado (R$)</Label>
                       <Input name="estimated_cost" type="number" defaultValue={0} />
                     </div>
+                    <div />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div><Label>Data Início</Label><Input name="start_date" type="date" /></div>
                     <div><Label>Data Fim</Label><Input name="end_date" type="date" /></div>
                   </div>
+
+                  {/* Multi-squad with cost share */}
+                  <div className="space-y-2">
+                    <Label>Squads e Rateio (R$)</Label>
+                    <div className="border rounded-md p-3 space-y-2 max-h-48 overflow-y-auto">
+                      {squads?.map(sq => {
+                        const isSelected = selectedSquads[sq.id] !== undefined;
+                        return (
+                          <div key={sq.id} className="flex items-center gap-3">
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleSquad(sq.id)}
+                            />
+                            <span className="text-sm flex-1 truncate">{sq.name}</span>
+                            {isSelected && (
+                              <Input
+                                type="number"
+                                min={0}
+                                className="w-32 h-8 text-sm"
+                                placeholder="R$ 0"
+                                value={selectedSquads[sq.id] || ""}
+                                onChange={(e) => updateSquadCost(sq.id, Number(e.target.value) || 0)}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {Object.keys(selectedSquads).length > 0 && (
+                      <div className="flex justify-between text-sm px-1">
+                        <span className="text-muted-foreground">Total rateado:</span>
+                        <span className="font-medium">R$ {totalRateado.toLocaleString("pt-BR")}</span>
+                      </div>
+                    )}
+                  </div>
+
                   <Button type="submit" className="w-full">Salvar Demanda</Button>
                 </form>
               </DialogContent>
@@ -450,7 +573,7 @@ const Roadmap = () => {
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Alocação por Squad</CardTitle>
-                <CardDescription>Investimento e carga de trabalho por squad</CardDescription>
+                <CardDescription>Investimento e carga de trabalho por squad (inclui rateio)</CardDescription>
               </CardHeader>
               <CardContent>
                 {squadData.length === 0 ? (
@@ -468,10 +591,14 @@ const Roadmap = () => {
                           borderRadius: "8px",
                           fontSize: "12px",
                         }}
+                        formatter={(value: number, name: string) => {
+                          if (name === "Investimento (R$)") return [`R$ ${value.toLocaleString("pt-BR")}`, name];
+                          return [value, name];
+                        }}
                       />
                       <Legend />
                       <Bar dataKey="total" name="Demandas" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="hours" name="Horas" fill="hsl(38, 92%, 50%)" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="cost" name="Investimento (R$)" fill="hsl(38, 92%, 50%)" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -539,7 +666,7 @@ const Roadmap = () => {
                     <TableRow>
                       <TableHead>Título</TableHead>
                       <TableHead>Unidade</TableHead>
-                      <TableHead>Squad</TableHead>
+                      <TableHead>Squads</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Prioridade</TableHead>
                       <TableHead>Categoria</TableHead>
@@ -551,11 +678,27 @@ const Roadmap = () => {
                     {filteredItems.map(item => {
                       const status = STATUS_MAP[item.status] || { label: item.status, variant: "secondary" as const };
                       const priority = PRIORITY_MAP[item.priority] || { label: item.priority, color: "" };
+                      const squadsForItem = getSquadsForItem(item.id, (item as any).squads?.name);
                       return (
                         <TableRow key={item.id}>
                           <TableCell className="font-medium max-w-[200px] truncate">{item.title}</TableCell>
                           <TableCell className="text-sm">{(item as any).business_units?.name || "—"}</TableCell>
-                          <TableCell className="text-sm">{(item as any).squads?.name || "—"}</TableCell>
+                          <TableCell>
+                            {squadsForItem.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {squadsForItem.map((s, i) => (
+                                  <Badge key={i} variant="secondary" className="text-xs">
+                                    {s.squad_name}
+                                    {s.cost_share > 0 && (
+                                      <span className="ml-1 text-muted-foreground">
+                                        R${(s.cost_share / 1000).toFixed(0)}k
+                                      </span>
+                                    )}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : "—"}
+                          </TableCell>
                           <TableCell><Badge variant={status.variant}>{status.label}</Badge></TableCell>
                           <TableCell><Badge variant="outline" className={priority.color}>{priority.label}</Badge></TableCell>
                           <TableCell className="text-sm">{CATEGORY_MAP[item.category] || item.category}</TableCell>
