@@ -283,6 +283,10 @@ const Squads = () => {
                   </ResponsiveContainer>
                 ) : (
                   <p className="text-center text-muted-foreground py-8">Sem dados</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {/* Burndown Chart */}
@@ -292,10 +296,6 @@ const Squads = () => {
             title={`Burndown — ${currentSprint.name}`}
             description="Remaining points ao longo da sprint"
           />
-        
-              </CardContent>
-            </Card>
-          </div>
         )}
 
         {/* Sprints Table */}
