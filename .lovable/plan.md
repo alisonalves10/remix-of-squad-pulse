@@ -1,20 +1,23 @@
 
 
-# Melhorias na página de Sprint
+# Melhorias nos KPIs da Sprint
 
-## 1. Visão Gerencial com Collapse
-Envolver o card da Visão Gerencial em um `Collapsible` (já importado) com estado inicial aberto, permitindo minimizar/expandir clicando no header. O ícone alterna entre `ChevronDown` e `ChevronRight`.
+## 1. Porcentagem de entrega de itens
+Adicionar subtitle com a porcentagem de itens concluídos no KPI "Itens Concluídos".
 
-## 2. Coluna Parent com ID numérico
-Na tabela de Work Items, trocar o conteúdo da coluna "US/Parent" para exibir o **ID numérico** do parent (ex: `#52497`) em vez do título. Renomear o header para "Parent".
+**Em `src/hooks/useSprintDetailData.ts`:**
+- Calcular `completionRate = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0`
+- Retornar `completionRate` no objeto de retorno
 
-## 3. Ordenar por Parent
-Ordenar `filteredItems` por `parent_id` (nulls por último), agrupando visualmente os itens que pertencem ao mesmo parent.
+**Em `src/pages/Sprints.tsx`:**
+- No KPI "Itens Concluídos", adicionar `subtitle={`${completionRate}% concluídos`}`
+
+## 2. Bugs — verificação dos dados
+Os dados estão corretos. A contagem de bugs vem de todos os work_items da sprint onde `type === "Bug"`. Backoffice Sprint 7 realmente tem 0 bugs no banco. Squads como "Arquitetura e Inovação" Sprint 6 têm 19 bugs. O KPI está funcionando — o valor 0/0 significa que não houve bugs nessa sprint.
+
+Para melhorar a visibilidade, vou adicionar também o subtitle no KPI de Bugs mostrando a taxa de resolução quando houver bugs.
 
 ## Arquivos alterados
-- **`src/pages/Sprints.tsx`**:
-  - Adicionar estado `const [isGerencialOpen, setIsGerencialOpen] = useState(true)` 
-  - Envolver o card da Visão Gerencial em `Collapsible` com trigger no header
-  - Na coluna Parent: mostrar `item.parent_id` formatado como `#ID` em vez de `parent_title`
-  - Ordenar `filteredItems` por `parent_id` ascendente (nulls last)
+- **`src/hooks/useSprintDetailData.ts`** — adicionar `completionRate` ao retorno
+- **`src/pages/Sprints.tsx`** — exibir `completionRate` como subtitle no KPI "Itens Concluídos" e melhorar subtitle do KPI de Bugs
 
