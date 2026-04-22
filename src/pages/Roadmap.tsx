@@ -995,28 +995,56 @@ const Roadmap = () => {
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Demandas</CardTitle>
-                <CardDescription>{filteredItems.length} demandas encontradas</CardDescription>
+                <CardDescription>
+                  {sortedItems.length} demandas encontradas
+                  {filterBU !== "all" && (
+                    <> · Investimento rateado nesta BU: <span className="font-medium text-foreground">R$ {totalInvested.toLocaleString("pt-BR")}</span></>
+                  )}
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Título</TableHead>
-                      <TableHead>Unidade</TableHead>
-                      <TableHead>Squads</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Prioridade</TableHead>
-                      <TableHead>Categoria</TableHead>
-                      <TableHead className="text-right">Custo (R$)</TableHead>
-                      <TableHead>Período</TableHead>
+                      {([
+                        { key: "title", label: "Título", align: "left" as const },
+                        { key: null, label: "Unidade", align: "left" as const },
+                        { key: null, label: "Squads", align: "left" as const },
+                        { key: "status", label: "Status", align: "left" as const },
+                        { key: "priority", label: "Prioridade", align: "left" as const },
+                        { key: "category", label: "Categoria", align: "left" as const },
+                        { key: "cost", label: filterBU !== "all" ? "Custo Rateado (R$)" : "Custo (R$)", align: "right" as const },
+                        { key: "period", label: "Período", align: "left" as const },
+                      ] as const).map((col, idx) => {
+                        const sortable = col.key !== null;
+                        const active = sortable && sortKey === col.key;
+                        const Icon = !sortable ? null : active ? (sortDir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+                        return (
+                          <TableHead key={idx} className={col.align === "right" ? "text-right" : undefined}>
+                            {sortable ? (
+                              <button
+                                type="button"
+                                onClick={() => toggleSort(col.key as SortKey)}
+                                className={`inline-flex items-center gap-1 hover:text-foreground transition-colors ${active ? "text-foreground font-medium" : ""} ${col.align === "right" ? "ml-auto" : ""}`}
+                              >
+                                {col.label}
+                                {Icon && <Icon className="h-3 w-3" />}
+                              </button>
+                            ) : col.label}
+                          </TableHead>
+                        );
+                      })}
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredItems.map(item => {
+                    {sortedItems.map(item => {
                       const status = STATUS_MAP[item.status] || { label: item.status, variant: "secondary" as const };
                       const priority = PRIORITY_MAP[item.priority] || { label: item.priority, color: "" };
                       const squadsForItem = getSquadsForItem(item.id, (item as any).squads?.name);
+                      const displayCost = filterBU !== "all"
+                        ? getItemRateadoCost(item.id, item.estimated_cost || 0)
+                        : (item.estimated_cost || 0);
                       return (
                         <TableRow key={item.id}>
                           <TableCell className="font-medium max-w-[200px] truncate">{item.title}</TableCell>
@@ -1061,7 +1089,7 @@ const Roadmap = () => {
                           <TableCell><Badge variant={status.variant}>{status.label}</Badge></TableCell>
                           <TableCell><Badge variant="outline" className={priority.color}>{priority.label}</Badge></TableCell>
                           <TableCell className="text-sm">{CATEGORY_MAP[item.category] || item.category}</TableCell>
-                          <TableCell className="text-right text-sm">{(item.estimated_cost || 0).toLocaleString("pt-BR")}</TableCell>
+                          <TableCell className="text-right text-sm tabular-nums">{displayCost.toLocaleString("pt-BR")}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {item.start_date && item.end_date
                               ? `${format(parseISO(item.start_date), "dd/MM/yy")} – ${format(parseISO(item.end_date), "dd/MM/yy")}`
@@ -1080,7 +1108,7 @@ const Roadmap = () => {
                         </TableRow>
                       );
                     })}
-                    {filteredItems.length === 0 && (
+                    {sortedItems.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={9} className="text-center text-muted-foreground py-8">Nenhuma demanda encontrada</TableCell>
                       </TableRow>
