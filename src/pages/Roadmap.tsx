@@ -8,7 +8,8 @@ import { KPICard } from "@/components/dashboard/KPICard";
 import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { useBusinessUnits, useRoadmapItems, useSquadBusinessUnits, useRoadmapItemSquads } from "@/hooks/useRoadmapData";
 import { useExport } from "@/hooks/useExport";
-import { Loader2, DollarSign, Rocket, CheckCircle2, AlertTriangle, Plus, X } from "lucide-react";
+import { Loader2, DollarSign, Rocket, CheckCircle2, AlertTriangle, Plus, X, Pencil, Trash2, Users } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useState, useMemo } from "react";
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -80,6 +81,8 @@ const Roadmap = () => {
   const [filterSquad, setFilterSquad] = useState("all");
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [addBUDialogOpen, setAddBUDialogOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
 
   // Multi-squad form state
   const [selectedSquads, setSelectedSquads] = useState<Record<string, number>>({});
@@ -207,36 +210,51 @@ const Roadmap = () => {
 
   const isLoading = itemsLoading || buLoading;
 
-  // Add item form
+  // Add or edit item form
   const handleAddItem = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const estimatedCost = Number(fd.get("estimated_cost")) || 0;
 
-    const { data: newItem, error } = await supabase.from("roadmap_items").insert({
+    const payload = {
       title: fd.get("title") as string,
       description: fd.get("description") as string || null,
       business_unit_id: (fd.get("business_unit_id") as string) || null,
-      squad_id: null, // legacy field — use junction table
+      squad_id: null,
       status: fd.get("status") as string,
       priority: fd.get("priority") as string,
       start_date: (fd.get("start_date") as string) || null,
       end_date: (fd.get("end_date") as string) || null,
       estimated_cost: estimatedCost,
       category: fd.get("category") as string,
-    }).select("id").single();
+    };
 
-    if (error || !newItem) {
-      toast.error("Erro ao adicionar demanda");
-      return;
+    let itemId: string | null = null;
+
+    if (editingItem) {
+      const { error } = await supabase.from("roadmap_items").update(payload).eq("id", editingItem.id);
+      if (error) {
+        toast.error("Erro ao atualizar demanda");
+        return;
+      }
+      itemId = editingItem.id;
+      // Remove existing squad allocations for this item
+      await supabase.from("roadmap_item_squads").delete().eq("roadmap_item_id", itemId);
+    } else {
+      const { data: newItem, error } = await supabase.from("roadmap_items").insert(payload).select("id").single();
+      if (error || !newItem) {
+        toast.error("Erro ao adicionar demanda");
+        return;
+      }
+      itemId = newItem.id;
     }
 
     // Insert squad cost shares
     const squadEntries = Object.entries(selectedSquads);
-    if (squadEntries.length > 0) {
+    if (squadEntries.length > 0 && itemId) {
       const { error: sqError } = await supabase.from("roadmap_item_squads").insert(
         squadEntries.map(([squad_id, cost_share]) => ({
-          roadmap_item_id: newItem.id,
+          roadmap_item_id: itemId!,
           squad_id,
           cost_share,
         }))
@@ -247,11 +265,38 @@ const Roadmap = () => {
       }
     }
 
-    toast.success("Demanda adicionada");
+    toast.success(editingItem ? "Demanda atualizada" : "Demanda adicionada");
     queryClient.invalidateQueries({ queryKey: ["roadmap_items"] });
     queryClient.invalidateQueries({ queryKey: ["roadmap_item_squads"] });
     setAddDialogOpen(false);
+    setEditingItem(null);
     setSelectedSquads({});
+  };
+
+  const openEditDialog = (item: any) => {
+    setEditingItem(item);
+    // Pre-populate squad allocations from junction table
+    const squadsForItem = itemSquadsMap[item.id] || [];
+    const initial: Record<string, number> = {};
+    squadsForItem.forEach(s => {
+      if (s.squad_id) initial[s.squad_id] = s.cost_share;
+    });
+    setSelectedSquads(initial);
+    setAddDialogOpen(true);
+  };
+
+  const handleDeleteItem = async () => {
+    if (!deletingItemId) return;
+    // Junction rows are removed via ON DELETE CASCADE
+    const { error } = await supabase.from("roadmap_items").delete().eq("id", deletingItemId);
+    if (error) {
+      toast.error("Erro ao excluir demanda");
+      return;
+    }
+    toast.success("Demanda excluída");
+    queryClient.invalidateQueries({ queryKey: ["roadmap_items"] });
+    queryClient.invalidateQueries({ queryKey: ["roadmap_item_squads"] });
+    setDeletingItemId(null);
   };
 
   const handleAddBU = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -315,26 +360,26 @@ const Roadmap = () => {
                 </form>
               </DialogContent>
             </Dialog>
-            <Dialog open={addDialogOpen} onOpenChange={(open) => { setAddDialogOpen(open); if (!open) setSelectedSquads({}); }}>
+            <Dialog open={addDialogOpen} onOpenChange={(open) => { setAddDialogOpen(open); if (!open) { setSelectedSquads({}); setEditingItem(null); } }}>
               <DialogTrigger asChild>
-                <Button size="sm"><Plus className="h-4 w-4 mr-1" />Demanda</Button>
+                <Button size="sm" onClick={() => { setEditingItem(null); setSelectedSquads({}); }}><Plus className="h-4 w-4 mr-1" />Demanda</Button>
               </DialogTrigger>
               <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                <DialogHeader><DialogTitle>Nova Demanda</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>{editingItem ? "Editar Demanda" : "Nova Demanda"}</DialogTitle></DialogHeader>
                 <form onSubmit={handleAddItem} className="space-y-3">
-                  <div><Label>Título</Label><Input name="title" required /></div>
-                  <div><Label>Descrição</Label><Textarea name="description" /></div>
+                  <div><Label>Título</Label><Input name="title" required defaultValue={editingItem?.title || ""} /></div>
+                  <div><Label>Descrição</Label><Textarea name="description" defaultValue={editingItem?.description || ""} /></div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Unidade de Negócio</Label>
-                      <select name="business_unit_id" className="w-full border rounded-md px-3 py-2 text-sm bg-background">
+                      <select name="business_unit_id" defaultValue={editingItem?.business_unit_id || ""} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
                         <option value="">Nenhuma</option>
                         {businessUnits?.map(bu => <option key={bu.id} value={bu.id}>{bu.name}</option>)}
                       </select>
                     </div>
                     <div>
                       <Label>Categoria</Label>
-                      <select name="category" className="w-full border rounded-md px-3 py-2 text-sm bg-background">
+                      <select name="category" defaultValue={editingItem?.category || "feature"} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
                         {Object.entries(CATEGORY_MAP).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                       </select>
                     </div>
@@ -342,13 +387,13 @@ const Roadmap = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Status</Label>
-                      <select name="status" className="w-full border rounded-md px-3 py-2 text-sm bg-background">
+                      <select name="status" defaultValue={editingItem?.status || "planned"} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
                         {Object.entries(STATUS_MAP).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                       </select>
                     </div>
                     <div>
                       <Label>Prioridade</Label>
-                      <select name="priority" className="w-full border rounded-md px-3 py-2 text-sm bg-background">
+                      <select name="priority" defaultValue={editingItem?.priority || "medium"} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
                         {Object.entries(PRIORITY_MAP).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                       </select>
                     </div>
@@ -356,13 +401,13 @@ const Roadmap = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Custo Estimado (R$)</Label>
-                      <Input name="estimated_cost" type="number" defaultValue={0} />
+                      <Input name="estimated_cost" type="number" defaultValue={editingItem?.estimated_cost ?? 0} />
                     </div>
                     <div />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div><Label>Data Início</Label><Input name="start_date" type="date" /></div>
-                    <div><Label>Data Fim</Label><Input name="end_date" type="date" /></div>
+                    <div><Label>Data Início</Label><Input name="start_date" type="date" defaultValue={editingItem?.start_date || ""} /></div>
+                    <div><Label>Data Fim</Label><Input name="end_date" type="date" defaultValue={editingItem?.end_date || ""} /></div>
                   </div>
 
                   {/* Multi-squad with cost share */}
@@ -400,7 +445,7 @@ const Roadmap = () => {
                     )}
                   </div>
 
-                  <Button type="submit" className="w-full">Salvar Demanda</Button>
+                  <Button type="submit" className="w-full">{editingItem ? "Atualizar Demanda" : "Salvar Demanda"}</Button>
                 </form>
               </DialogContent>
             </Dialog>
@@ -569,7 +614,48 @@ const Roadmap = () => {
           </TabsContent>
 
           {/* Squads */}
-          <TabsContent value="squads">
+          <TabsContent value="squads" className="space-y-4">
+            {/* Investment summary cards per squad */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-sm font-medium text-foreground">Resumo de Investimento por Squad</h3>
+              </div>
+              {squadData.length === 0 ? (
+                <p className="text-muted-foreground text-sm text-center py-4">Nenhuma demanda atribuída a squads</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {squadData
+                    .slice()
+                    .sort((a, b) => b.cost - a.cost)
+                    .map((sq) => {
+                      const totalAll = squadData.reduce((s, x) => s + x.cost, 0);
+                      const pct = totalAll > 0 ? Math.round((sq.cost / totalAll) * 100) : 0;
+                      return (
+                        <Card key={sq.name}>
+                          <CardContent className="p-4 space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm font-medium text-foreground truncate" title={sq.name}>{sq.name}</p>
+                              <Badge variant="secondary" className="text-xs shrink-0">{pct}%</Badge>
+                            </div>
+                            <p className="text-2xl font-bold text-primary">
+                              R$ {(sq.cost / 1000).toFixed(0)}k
+                            </p>
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>{sq.total} demanda{sq.total === 1 ? "" : "s"}</span>
+                              <span>R$ {sq.cost.toLocaleString("pt-BR")}</span>
+                            </div>
+                            <div className="w-full bg-muted rounded-full h-1.5">
+                              <div className="bg-primary h-1.5 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Alocação por Squad</CardTitle>
@@ -672,6 +758,7 @@ const Roadmap = () => {
                       <TableHead>Categoria</TableHead>
                       <TableHead className="text-right">Custo (R$)</TableHead>
                       <TableHead>Período</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -708,12 +795,22 @@ const Roadmap = () => {
                               ? `${format(parseISO(item.start_date), "dd/MM/yy")} – ${format(parseISO(item.end_date), "dd/MM/yy")}`
                               : "—"}
                           </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditDialog(item)} title="Editar">
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeletingItemId(item.id)} title="Excluir">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       );
                     })}
                     {filteredItems.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhuma demanda encontrada</TableCell>
+                        <TableCell colSpan={9} className="text-center text-muted-foreground py-8">Nenhuma demanda encontrada</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
@@ -722,6 +819,24 @@ const Roadmap = () => {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Delete confirmation */}
+        <AlertDialog open={!!deletingItemId} onOpenChange={(open) => { if (!open) setDeletingItemId(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir demanda?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta ação não pode ser desfeita. A demanda e seus rateios entre squads serão removidos permanentemente.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteItem} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </AppLayout>
   );
