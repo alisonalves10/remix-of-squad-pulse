@@ -601,6 +601,64 @@ const Roadmap = () => {
                         </span>
                       </div>
                     )}
+
+                    {/* Preview da distribuição entre BUs */}
+                    {selectedBUIds.length > 0 && estimatedCostInput > 0 && (
+                      <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-foreground">Pré-visualização do rateio</span>
+                          {selectedBUIds.length > 1 && totalRateadoBU !== estimatedCostInput && (
+                            <span className="text-[10px] text-destructive font-medium">
+                              {totalRateadoBU < estimatedCostInput
+                                ? `Faltam R$ ${(estimatedCostInput - totalRateadoBU).toLocaleString("pt-BR")}`
+                                : `Excede em R$ ${(totalRateadoBU - estimatedCostInput).toLocaleString("pt-BR")}`}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Barra empilhada */}
+                        <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted">
+                          {selectedBUIds.map((buId, idx) => {
+                            const value = selectedBUIds.length === 1 ? estimatedCostInput : (selectedBUs[buId] || 0);
+                            const denom = selectedBUIds.length === 1 ? estimatedCostInput : Math.max(totalRateadoBU, estimatedCostInput);
+                            const pct = denom > 0 ? (value / denom) * 100 : 0;
+                            const color = PIE_COLORS[idx % PIE_COLORS.length];
+                            return (
+                              <div
+                                key={buId}
+                                style={{ width: `${pct}%`, backgroundColor: color }}
+                                className="transition-all"
+                                title={`${businessUnits?.find(b => b.id === buId)?.name}: R$ ${value.toLocaleString("pt-BR")}`}
+                              />
+                            );
+                          })}
+                        </div>
+
+                        {/* Lista detalhada por BU */}
+                        <div className="space-y-1">
+                          {selectedBUIds.map((buId, idx) => {
+                            const buName = businessUnits?.find(b => b.id === buId)?.name || "—";
+                            const value = selectedBUIds.length === 1 ? estimatedCostInput : (selectedBUs[buId] || 0);
+                            const pct = estimatedCostInput > 0 ? (value / estimatedCostInput) * 100 : 0;
+                            const color = PIE_COLORS[idx % PIE_COLORS.length];
+                            return (
+                              <div key={buId} className="flex items-center justify-between text-xs">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                                  <span className="truncate text-foreground">{buName}</span>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0 tabular-nums">
+                                  <span className="text-muted-foreground">{pct.toFixed(1)}%</span>
+                                  <span className="font-medium text-foreground">
+                                    R$ {value.toLocaleString("pt-BR")}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Multi-squad with cost share */}
