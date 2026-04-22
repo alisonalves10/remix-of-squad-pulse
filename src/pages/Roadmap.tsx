@@ -85,6 +85,11 @@ const Roadmap = () => {
   const [editingItem, setEditingItem] = useState<any | null>(null);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
 
+  // Sort state for table
+  type SortKey = "title" | "status" | "priority" | "category" | "cost" | "period";
+  const [sortKey, setSortKey] = useState<SortKey>("cost");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
   // Multi-squad form state
   const [selectedSquads, setSelectedSquads] = useState<Record<string, number>>({});
   // Multi-BU form state (busId -> cost_share)
