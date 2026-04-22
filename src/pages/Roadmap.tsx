@@ -278,10 +278,14 @@ const Roadmap = () => {
     const fd = new FormData(e.currentTarget);
     const estimatedCost = Number(fd.get("estimated_cost")) || 0;
 
+    const buIds = Object.keys(selectedBUs);
+    // Legacy business_unit_id = first selected BU (compat)
+    const legacyBUId = buIds[0] || null;
+
     const payload = {
       title: fd.get("title") as string,
       description: fd.get("description") as string || null,
-      business_unit_id: (fd.get("business_unit_id") as string) || null,
+      business_unit_id: legacyBUId,
       squad_id: null,
       status: fd.get("status") as string,
       priority: fd.get("priority") as string,
@@ -300,8 +304,9 @@ const Roadmap = () => {
         return;
       }
       itemId = editingItem.id;
-      // Remove existing squad allocations for this item
+      // Remove existing allocations for this item
       await supabase.from("roadmap_item_squads").delete().eq("roadmap_item_id", itemId);
+      await supabase.from("roadmap_item_business_units").delete().eq("roadmap_item_id", itemId);
     } else {
       const { data: newItem, error } = await supabase.from("roadmap_items").insert(payload).select("id").single();
       if (error || !newItem) {
@@ -327,23 +332,56 @@ const Roadmap = () => {
       }
     }
 
+    // Insert BU cost shares — single BU gets full estimated_cost; multi splits via input
+    const buEntries = Object.entries(selectedBUs);
+    if (buEntries.length > 0 && itemId) {
+      const rows = buEntries.length === 1
+        ? [{ roadmap_item_id: itemId, business_unit_id: buEntries[0][0], cost_share: estimatedCost }]
+        : buEntries.map(([business_unit_id, cost_share]) => ({
+            roadmap_item_id: itemId!,
+            business_unit_id,
+            cost_share,
+          }));
+      const { error: buError } = await supabase.from("roadmap_item_business_units").insert(rows);
+      if (buError) {
+        toast.error("Erro ao salvar rateio de unidades de negócio");
+        return;
+      }
+    }
+
     toast.success(editingItem ? "Demanda atualizada" : "Demanda adicionada");
     queryClient.invalidateQueries({ queryKey: ["roadmap_items"] });
     queryClient.invalidateQueries({ queryKey: ["roadmap_item_squads"] });
+    queryClient.invalidateQueries({ queryKey: ["roadmap_item_business_units"] });
     setAddDialogOpen(false);
     setEditingItem(null);
     setSelectedSquads({});
+    setSelectedBUs({});
+    setEstimatedCostInput(0);
   };
 
   const openEditDialog = (item: any) => {
     setEditingItem(item);
     // Pre-populate squad allocations from junction table
     const squadsForItem = itemSquadsMap[item.id] || [];
-    const initial: Record<string, number> = {};
+    const initialSquads: Record<string, number> = {};
     squadsForItem.forEach(s => {
-      if (s.squad_id) initial[s.squad_id] = s.cost_share;
+      if (s.squad_id) initialSquads[s.squad_id] = s.cost_share;
     });
-    setSelectedSquads(initial);
+    setSelectedSquads(initialSquads);
+
+    // Pre-populate BU allocations from junction table (fallback to legacy business_unit_id)
+    const busForItem = itemBUsMap[item.id] || [];
+    const initialBUs: Record<string, number> = {};
+    if (busForItem.length > 0) {
+      busForItem.forEach(b => {
+        initialBUs[b.business_unit_id] = b.cost_share;
+      });
+    } else if (item.business_unit_id) {
+      initialBUs[item.business_unit_id] = Number(item.estimated_cost) || 0;
+    }
+    setSelectedBUs(initialBUs);
+    setEstimatedCostInput(Number(item.estimated_cost) || 0);
     setAddDialogOpen(true);
   };
 
