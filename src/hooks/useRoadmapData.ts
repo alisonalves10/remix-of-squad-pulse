@@ -55,3 +55,16 @@ export function useRoadmapItemSquads() {
     },
   });
 }
+
+export function useRoadmapItemBusinessUnits() {
+  return useQuery({
+    queryKey: ["roadmap_item_business_units"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("roadmap_item_business_units")
+        .select("*, business_units(name)");
+      if (error) throw error;
+      return data;
+    },
+  });
+}

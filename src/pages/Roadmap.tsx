@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { ExportButtons } from "@/components/dashboard/ExportButtons";
-import { useBusinessUnits, useRoadmapItems, useSquadBusinessUnits, useRoadmapItemSquads } from "@/hooks/useRoadmapData";
+import { useBusinessUnits, useRoadmapItems, useSquadBusinessUnits, useRoadmapItemSquads, useRoadmapItemBusinessUnits } from "@/hooks/useRoadmapData";
 import { useExport } from "@/hooks/useExport";
 import { Loader2, DollarSign, Rocket, CheckCircle2, AlertTriangle, Plus, X, Pencil, Trash2, Users } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -73,6 +73,7 @@ const Roadmap = () => {
   const { data: squads } = useSquads();
   const { data: squadBU } = useSquadBusinessUnits();
   const { data: itemSquads } = useRoadmapItemSquads();
+  const { data: itemBUs } = useRoadmapItemBusinessUnits();
   const queryClient = useQueryClient();
 
   const [filterBU, setFilterBU] = useState("all");
@@ -86,6 +87,9 @@ const Roadmap = () => {
 
   // Multi-squad form state
   const [selectedSquads, setSelectedSquads] = useState<Record<string, number>>({});
+  // Multi-BU form state (busId -> cost_share)
+  const [selectedBUs, setSelectedBUs] = useState<Record<string, number>>({});
+  const [estimatedCostInput, setEstimatedCostInput] = useState<number>(0);
 
   const toggleSquad = (squadId: string) => {
     setSelectedSquads(prev => {
@@ -103,7 +107,25 @@ const Roadmap = () => {
     setSelectedSquads(prev => ({ ...prev, [squadId]: value }));
   };
 
+  const toggleBU = (buId: string) => {
+    setSelectedBUs(prev => {
+      const next = { ...prev };
+      if (next[buId] !== undefined) {
+        delete next[buId];
+      } else {
+        next[buId] = 0;
+      }
+      return next;
+    });
+  };
+
+  const updateBUCost = (buId: string, value: number) => {
+    setSelectedBUs(prev => ({ ...prev, [buId]: value }));
+  };
+
   const totalRateado = useMemo(() => Object.values(selectedSquads).reduce((s, v) => s + v, 0), [selectedSquads]);
+  const totalRateadoBU = useMemo(() => Object.values(selectedBUs).reduce((s, v) => s + v, 0), [selectedBUs]);
+  const selectedBUIds = useMemo(() => Object.keys(selectedBUs), [selectedBUs]);
 
   // Build a map: itemId -> squads with cost_share
   const itemSquadsMap = useMemo(() => {
@@ -120,10 +142,32 @@ const Roadmap = () => {
     return map;
   }, [itemSquads]);
 
+  // Build a map: itemId -> business units with cost_share
+  const itemBUsMap = useMemo(() => {
+    const map: Record<string, Array<{ business_unit_id: string; bu_name: string; cost_share: number }>> = {};
+    if (!itemBUs) return map;
+    for (const ib of itemBUs) {
+      if (!map[ib.roadmap_item_id]) map[ib.roadmap_item_id] = [];
+      map[ib.roadmap_item_id].push({
+        business_unit_id: ib.business_unit_id,
+        bu_name: (ib as any).business_units?.name || "—",
+        cost_share: Number(ib.cost_share) || 0,
+      });
+    }
+    return map;
+  }, [itemBUs]);
+
   const filteredItems = useMemo(() => {
     if (!items) return [];
     return items.filter(item => {
-      if (filterBU !== "all" && item.business_unit_id !== filterBU) return false;
+      if (filterBU !== "all") {
+        const busForItem = itemBUsMap[item.id];
+        if (busForItem && busForItem.length > 0) {
+          if (!busForItem.some(b => b.business_unit_id === filterBU)) return false;
+        } else if (item.business_unit_id !== filterBU) {
+          return false;
+        }
+      }
       if (filterStatus !== "all" && item.status !== filterStatus) return false;
       if (filterCategory !== "all" && item.category !== filterCategory) return false;
       if (filterSquad !== "all") {
@@ -137,7 +181,7 @@ const Roadmap = () => {
       }
       return true;
     });
-  }, [items, filterBU, filterStatus, filterCategory, filterSquad, itemSquadsMap]);
+  }, [items, filterBU, filterStatus, filterCategory, filterSquad, itemSquadsMap, itemBUsMap]);
 
   // KPIs
   const totalInvested = useMemo(() => filteredItems.reduce((s, i) => s + (i.estimated_cost || 0), 0), [filteredItems]);
@@ -160,18 +204,36 @@ const Roadmap = () => {
     return Object.entries(map).map(([name, value]) => ({ name, value }));
   }, [filteredItems]);
 
-  // By BU
+  // By BU — use cost_share from junction table, fallback to legacy business_unit_id
   const buData = useMemo(() => {
     if (!businessUnits) return [];
     return businessUnits.map(bu => {
-      const buItems = (items || []).filter(i => i.business_unit_id === bu.id);
-      const total = buItems.length;
-      const done = buItems.filter(i => i.status === "done").length;
-      const cost = buItems.reduce((s, i) => s + (i.estimated_cost || 0), 0);
-      const hours = buItems.reduce((s, i) => s + (i.invested_hours || 0), 0);
+      // Sum cost_share from junction for this BU
+      let junctionCost = 0;
+      const itemIdsInJunction = new Set<string>();
+      if (itemBUs) {
+        for (const ib of itemBUs) {
+          if (ib.business_unit_id === bu.id) {
+            junctionCost += Number(ib.cost_share) || 0;
+            itemIdsInJunction.add(ib.roadmap_item_id);
+          }
+        }
+      }
+      // Items associated through junction
+      const junctionItems = (items || []).filter(i => itemIdsInJunction.has(i.id));
+      // Legacy items (no junction entries) tied via business_unit_id
+      const legacyItems = (items || []).filter(i =>
+        i.business_unit_id === bu.id && !(itemBUsMap[i.id]?.length)
+      );
+      const allItems = [...junctionItems, ...legacyItems];
+      const total = allItems.length;
+      const done = allItems.filter(i => i.status === "done").length;
+      const legacyCost = legacyItems.reduce((s, i) => s + (i.estimated_cost || 0), 0);
+      const cost = junctionCost + legacyCost;
+      const hours = allItems.reduce((s, i) => s + (i.invested_hours || 0), 0);
       return { ...bu, total, done, cost, hours, pct: total > 0 ? Math.round((done / total) * 100) : 0 };
     });
-  }, [businessUnits, items]);
+  }, [businessUnits, items, itemBUs, itemBUsMap]);
 
   // By Squad — use cost_share from junction table
   const squadData = useMemo(() => {
@@ -216,10 +278,14 @@ const Roadmap = () => {
     const fd = new FormData(e.currentTarget);
     const estimatedCost = Number(fd.get("estimated_cost")) || 0;
 
+    const buIds = Object.keys(selectedBUs);
+    // Legacy business_unit_id = first selected BU (compat)
+    const legacyBUId = buIds[0] || null;
+
     const payload = {
       title: fd.get("title") as string,
       description: fd.get("description") as string || null,
-      business_unit_id: (fd.get("business_unit_id") as string) || null,
+      business_unit_id: legacyBUId,
       squad_id: null,
       status: fd.get("status") as string,
       priority: fd.get("priority") as string,
@@ -238,8 +304,9 @@ const Roadmap = () => {
         return;
       }
       itemId = editingItem.id;
-      // Remove existing squad allocations for this item
+      // Remove existing allocations for this item
       await supabase.from("roadmap_item_squads").delete().eq("roadmap_item_id", itemId);
+      await supabase.from("roadmap_item_business_units").delete().eq("roadmap_item_id", itemId);
     } else {
       const { data: newItem, error } = await supabase.from("roadmap_items").insert(payload).select("id").single();
       if (error || !newItem) {
@@ -265,23 +332,56 @@ const Roadmap = () => {
       }
     }
 
+    // Insert BU cost shares — single BU gets full estimated_cost; multi splits via input
+    const buEntries = Object.entries(selectedBUs);
+    if (buEntries.length > 0 && itemId) {
+      const rows = buEntries.length === 1
+        ? [{ roadmap_item_id: itemId, business_unit_id: buEntries[0][0], cost_share: estimatedCost }]
+        : buEntries.map(([business_unit_id, cost_share]) => ({
+            roadmap_item_id: itemId!,
+            business_unit_id,
+            cost_share,
+          }));
+      const { error: buError } = await supabase.from("roadmap_item_business_units").insert(rows);
+      if (buError) {
+        toast.error("Erro ao salvar rateio de unidades de negócio");
+        return;
+      }
+    }
+
     toast.success(editingItem ? "Demanda atualizada" : "Demanda adicionada");
     queryClient.invalidateQueries({ queryKey: ["roadmap_items"] });
     queryClient.invalidateQueries({ queryKey: ["roadmap_item_squads"] });
+    queryClient.invalidateQueries({ queryKey: ["roadmap_item_business_units"] });
     setAddDialogOpen(false);
     setEditingItem(null);
     setSelectedSquads({});
+    setSelectedBUs({});
+    setEstimatedCostInput(0);
   };
 
   const openEditDialog = (item: any) => {
     setEditingItem(item);
     // Pre-populate squad allocations from junction table
     const squadsForItem = itemSquadsMap[item.id] || [];
-    const initial: Record<string, number> = {};
+    const initialSquads: Record<string, number> = {};
     squadsForItem.forEach(s => {
-      if (s.squad_id) initial[s.squad_id] = s.cost_share;
+      if (s.squad_id) initialSquads[s.squad_id] = s.cost_share;
     });
-    setSelectedSquads(initial);
+    setSelectedSquads(initialSquads);
+
+    // Pre-populate BU allocations from junction table (fallback to legacy business_unit_id)
+    const busForItem = itemBUsMap[item.id] || [];
+    const initialBUs: Record<string, number> = {};
+    if (busForItem.length > 0) {
+      busForItem.forEach(b => {
+        initialBUs[b.business_unit_id] = b.cost_share;
+      });
+    } else if (item.business_unit_id) {
+      initialBUs[item.business_unit_id] = Number(item.estimated_cost) || 0;
+    }
+    setSelectedBUs(initialBUs);
+    setEstimatedCostInput(Number(item.estimated_cost) || 0);
     setAddDialogOpen(true);
   };
 
@@ -296,6 +396,7 @@ const Roadmap = () => {
     toast.success("Demanda excluída");
     queryClient.invalidateQueries({ queryKey: ["roadmap_items"] });
     queryClient.invalidateQueries({ queryKey: ["roadmap_item_squads"] });
+    queryClient.invalidateQueries({ queryKey: ["roadmap_item_business_units"] });
     setDeletingItemId(null);
   };
 
@@ -360,29 +461,20 @@ const Roadmap = () => {
                 </form>
               </DialogContent>
             </Dialog>
-            <Dialog open={addDialogOpen} onOpenChange={(open) => { setAddDialogOpen(open); if (!open) { setSelectedSquads({}); setEditingItem(null); } }}>
+            <Dialog open={addDialogOpen} onOpenChange={(open) => { setAddDialogOpen(open); if (!open) { setSelectedSquads({}); setSelectedBUs({}); setEstimatedCostInput(0); setEditingItem(null); } }}>
               <DialogTrigger asChild>
-                <Button size="sm" onClick={() => { setEditingItem(null); setSelectedSquads({}); }}><Plus className="h-4 w-4 mr-1" />Demanda</Button>
+                <Button size="sm" onClick={() => { setEditingItem(null); setSelectedSquads({}); setSelectedBUs({}); setEstimatedCostInput(0); }}><Plus className="h-4 w-4 mr-1" />Demanda</Button>
               </DialogTrigger>
               <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>{editingItem ? "Editar Demanda" : "Nova Demanda"}</DialogTitle></DialogHeader>
                 <form onSubmit={handleAddItem} className="space-y-3">
                   <div><Label>Título</Label><Input name="title" required defaultValue={editingItem?.title || ""} /></div>
                   <div><Label>Descrição</Label><Textarea name="description" defaultValue={editingItem?.description || ""} /></div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label>Unidade de Negócio</Label>
-                      <select name="business_unit_id" defaultValue={editingItem?.business_unit_id || ""} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
-                        <option value="">Nenhuma</option>
-                        {businessUnits?.map(bu => <option key={bu.id} value={bu.id}>{bu.name}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <Label>Categoria</Label>
-                      <select name="category" defaultValue={editingItem?.category || "feature"} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
-                        {Object.entries(CATEGORY_MAP).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                      </select>
-                    </div>
+                  <div>
+                    <Label>Categoria</Label>
+                    <select name="category" defaultValue={editingItem?.category || "feature"} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
+                      {Object.entries(CATEGORY_MAP).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -401,13 +493,64 @@ const Roadmap = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Custo Estimado (R$)</Label>
-                      <Input name="estimated_cost" type="number" defaultValue={editingItem?.estimated_cost ?? 0} />
+                      <Input
+                        name="estimated_cost"
+                        type="number"
+                        value={estimatedCostInput || ""}
+                        onChange={(e) => setEstimatedCostInput(Number(e.target.value) || 0)}
+                      />
                     </div>
                     <div />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div><Label>Data Início</Label><Input name="start_date" type="date" defaultValue={editingItem?.start_date || ""} /></div>
                     <div><Label>Data Fim</Label><Input name="end_date" type="date" defaultValue={editingItem?.end_date || ""} /></div>
+                  </div>
+
+                  {/* Multi-BU with cost share */}
+                  <div className="space-y-2">
+                    <Label>Unidades de Negócio {selectedBUIds.length > 1 && "e Rateio (R$)"}</Label>
+                    <div className="border rounded-md p-3 space-y-2 max-h-48 overflow-y-auto">
+                      {businessUnits?.map(bu => {
+                        const isSelected = selectedBUs[bu.id] !== undefined;
+                        const showInput = isSelected && selectedBUIds.length > 1;
+                        return (
+                          <div key={bu.id} className="flex items-center gap-3">
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleBU(bu.id)}
+                            />
+                            <span className="text-sm flex-1 truncate">{bu.name}</span>
+                            {showInput && (
+                              <Input
+                                type="number"
+                                min={0}
+                                className="w-32 h-8 text-sm"
+                                placeholder="R$ 0"
+                                value={selectedBUs[bu.id] || ""}
+                                onChange={(e) => updateBUCost(bu.id, Number(e.target.value) || 0)}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                      {(!businessUnits || businessUnits.length === 0) && (
+                        <p className="text-xs text-muted-foreground text-center py-2">Nenhuma unidade de negócio cadastrada</p>
+                      )}
+                    </div>
+                    {selectedBUIds.length === 1 && (
+                      <p className="text-xs text-muted-foreground px-1">
+                        100% do custo (R$ {estimatedCostInput.toLocaleString("pt-BR")}) será atribuído à unidade selecionada.
+                      </p>
+                    )}
+                    {selectedBUIds.length > 1 && (
+                      <div className="flex justify-between text-sm px-1">
+                        <span className="text-muted-foreground">Total rateado:</span>
+                        <span className={`font-medium ${totalRateadoBU !== estimatedCostInput ? "text-destructive" : ""}`}>
+                          R$ {totalRateadoBU.toLocaleString("pt-BR")} de R$ {estimatedCostInput.toLocaleString("pt-BR")}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Multi-squad with cost share */}
@@ -769,7 +912,28 @@ const Roadmap = () => {
                       return (
                         <TableRow key={item.id}>
                           <TableCell className="font-medium max-w-[200px] truncate">{item.title}</TableCell>
-                          <TableCell className="text-sm">{(item as any).business_units?.name || "—"}</TableCell>
+                          <TableCell>
+                            {(() => {
+                              const bus = itemBUsMap[item.id];
+                              if (bus && bus.length > 0) {
+                                return (
+                                  <div className="flex flex-wrap gap-1">
+                                    {bus.map((b, i) => (
+                                      <Badge key={i} variant="outline" className="text-xs">
+                                        {b.bu_name}
+                                        {bus.length > 1 && b.cost_share > 0 && (
+                                          <span className="ml-1 text-muted-foreground">
+                                            R${(b.cost_share / 1000).toFixed(0)}k
+                                          </span>
+                                        )}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                );
+                              }
+                              return <span className="text-sm">{(item as any).business_units?.name || "—"}</span>;
+                            })()}
+                          </TableCell>
                           <TableCell>
                             {squadsForItem.length > 0 ? (
                               <div className="flex flex-wrap gap-1">
