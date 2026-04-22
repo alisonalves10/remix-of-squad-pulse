@@ -758,6 +758,7 @@ const Roadmap = () => {
                       <TableHead>Categoria</TableHead>
                       <TableHead className="text-right">Custo (R$)</TableHead>
                       <TableHead>Período</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -794,12 +795,22 @@ const Roadmap = () => {
                               ? `${format(parseISO(item.start_date), "dd/MM/yy")} – ${format(parseISO(item.end_date), "dd/MM/yy")}`
                               : "—"}
                           </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditDialog(item)} title="Editar">
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeletingItemId(item.id)} title="Excluir">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       );
                     })}
                     {filteredItems.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhuma demanda encontrada</TableCell>
+                        <TableCell colSpan={9} className="text-center text-muted-foreground py-8">Nenhuma demanda encontrada</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
