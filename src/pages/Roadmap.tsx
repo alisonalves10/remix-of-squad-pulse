@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { ExportButtons } from "@/components/dashboard/ExportButtons";
-import { useBusinessUnits, useRoadmapItems, useSquadBusinessUnits, useRoadmapItemSquads } from "@/hooks/useRoadmapData";
+import { useBusinessUnits, useRoadmapItems, useSquadBusinessUnits, useRoadmapItemSquads, useRoadmapItemBusinessUnits } from "@/hooks/useRoadmapData";
 import { useExport } from "@/hooks/useExport";
 import { Loader2, DollarSign, Rocket, CheckCircle2, AlertTriangle, Plus, X, Pencil, Trash2, Users } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
