@@ -360,26 +360,26 @@ const Roadmap = () => {
                 </form>
               </DialogContent>
             </Dialog>
-            <Dialog open={addDialogOpen} onOpenChange={(open) => { setAddDialogOpen(open); if (!open) setSelectedSquads({}); }}>
+            <Dialog open={addDialogOpen} onOpenChange={(open) => { setAddDialogOpen(open); if (!open) { setSelectedSquads({}); setEditingItem(null); } }}>
               <DialogTrigger asChild>
-                <Button size="sm"><Plus className="h-4 w-4 mr-1" />Demanda</Button>
+                <Button size="sm" onClick={() => { setEditingItem(null); setSelectedSquads({}); }}><Plus className="h-4 w-4 mr-1" />Demanda</Button>
               </DialogTrigger>
               <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                <DialogHeader><DialogTitle>Nova Demanda</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>{editingItem ? "Editar Demanda" : "Nova Demanda"}</DialogTitle></DialogHeader>
                 <form onSubmit={handleAddItem} className="space-y-3">
-                  <div><Label>Título</Label><Input name="title" required /></div>
-                  <div><Label>Descrição</Label><Textarea name="description" /></div>
+                  <div><Label>Título</Label><Input name="title" required defaultValue={editingItem?.title || ""} /></div>
+                  <div><Label>Descrição</Label><Textarea name="description" defaultValue={editingItem?.description || ""} /></div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Unidade de Negócio</Label>
-                      <select name="business_unit_id" className="w-full border rounded-md px-3 py-2 text-sm bg-background">
+                      <select name="business_unit_id" defaultValue={editingItem?.business_unit_id || ""} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
                         <option value="">Nenhuma</option>
                         {businessUnits?.map(bu => <option key={bu.id} value={bu.id}>{bu.name}</option>)}
                       </select>
                     </div>
                     <div>
                       <Label>Categoria</Label>
-                      <select name="category" className="w-full border rounded-md px-3 py-2 text-sm bg-background">
+                      <select name="category" defaultValue={editingItem?.category || "feature"} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
                         {Object.entries(CATEGORY_MAP).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                       </select>
                     </div>
@@ -387,13 +387,13 @@ const Roadmap = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Status</Label>
-                      <select name="status" className="w-full border rounded-md px-3 py-2 text-sm bg-background">
+                      <select name="status" defaultValue={editingItem?.status || "planned"} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
                         {Object.entries(STATUS_MAP).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                       </select>
                     </div>
                     <div>
                       <Label>Prioridade</Label>
-                      <select name="priority" className="w-full border rounded-md px-3 py-2 text-sm bg-background">
+                      <select name="priority" defaultValue={editingItem?.priority || "medium"} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
                         {Object.entries(PRIORITY_MAP).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                       </select>
                     </div>
@@ -401,13 +401,13 @@ const Roadmap = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Custo Estimado (R$)</Label>
-                      <Input name="estimated_cost" type="number" defaultValue={0} />
+                      <Input name="estimated_cost" type="number" defaultValue={editingItem?.estimated_cost ?? 0} />
                     </div>
                     <div />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div><Label>Data Início</Label><Input name="start_date" type="date" /></div>
-                    <div><Label>Data Fim</Label><Input name="end_date" type="date" /></div>
+                    <div><Label>Data Início</Label><Input name="start_date" type="date" defaultValue={editingItem?.start_date || ""} /></div>
+                    <div><Label>Data Fim</Label><Input name="end_date" type="date" defaultValue={editingItem?.end_date || ""} /></div>
                   </div>
 
                   {/* Multi-squad with cost share */}
@@ -445,7 +445,7 @@ const Roadmap = () => {
                     )}
                   </div>
 
-                  <Button type="submit" className="w-full">Salvar Demanda</Button>
+                  <Button type="submit" className="w-full">{editingItem ? "Atualizar Demanda" : "Salvar Demanda"}</Button>
                 </form>
               </DialogContent>
             </Dialog>
