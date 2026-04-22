@@ -507,6 +507,52 @@ const Roadmap = () => {
                     <div><Label>Data Fim</Label><Input name="end_date" type="date" defaultValue={editingItem?.end_date || ""} /></div>
                   </div>
 
+                  {/* Multi-BU with cost share */}
+                  <div className="space-y-2">
+                    <Label>Unidades de Negócio {selectedBUIds.length > 1 && "e Rateio (R$)"}</Label>
+                    <div className="border rounded-md p-3 space-y-2 max-h-48 overflow-y-auto">
+                      {businessUnits?.map(bu => {
+                        const isSelected = selectedBUs[bu.id] !== undefined;
+                        const showInput = isSelected && selectedBUIds.length > 1;
+                        return (
+                          <div key={bu.id} className="flex items-center gap-3">
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleBU(bu.id)}
+                            />
+                            <span className="text-sm flex-1 truncate">{bu.name}</span>
+                            {showInput && (
+                              <Input
+                                type="number"
+                                min={0}
+                                className="w-32 h-8 text-sm"
+                                placeholder="R$ 0"
+                                value={selectedBUs[bu.id] || ""}
+                                onChange={(e) => updateBUCost(bu.id, Number(e.target.value) || 0)}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                      {(!businessUnits || businessUnits.length === 0) && (
+                        <p className="text-xs text-muted-foreground text-center py-2">Nenhuma unidade de negócio cadastrada</p>
+                      )}
+                    </div>
+                    {selectedBUIds.length === 1 && (
+                      <p className="text-xs text-muted-foreground px-1">
+                        100% do custo (R$ {estimatedCostInput.toLocaleString("pt-BR")}) será atribuído à unidade selecionada.
+                      </p>
+                    )}
+                    {selectedBUIds.length > 1 && (
+                      <div className="flex justify-between text-sm px-1">
+                        <span className="text-muted-foreground">Total rateado:</span>
+                        <span className={`font-medium ${totalRateadoBU !== estimatedCostInput ? "text-destructive" : ""}`}>
+                          R$ {totalRateadoBU.toLocaleString("pt-BR")} de R$ {estimatedCostInput.toLocaleString("pt-BR")}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Multi-squad with cost share */}
                   <div className="space-y-2">
                     <Label>Squads e Rateio (R$)</Label>
