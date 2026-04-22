@@ -614,7 +614,48 @@ const Roadmap = () => {
           </TabsContent>
 
           {/* Squads */}
-          <TabsContent value="squads">
+          <TabsContent value="squads" className="space-y-4">
+            {/* Investment summary cards per squad */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-sm font-medium text-foreground">Resumo de Investimento por Squad</h3>
+              </div>
+              {squadData.length === 0 ? (
+                <p className="text-muted-foreground text-sm text-center py-4">Nenhuma demanda atribuída a squads</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {squadData
+                    .slice()
+                    .sort((a, b) => b.cost - a.cost)
+                    .map((sq) => {
+                      const totalAll = squadData.reduce((s, x) => s + x.cost, 0);
+                      const pct = totalAll > 0 ? Math.round((sq.cost / totalAll) * 100) : 0;
+                      return (
+                        <Card key={sq.name}>
+                          <CardContent className="p-4 space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm font-medium text-foreground truncate" title={sq.name}>{sq.name}</p>
+                              <Badge variant="secondary" className="text-xs shrink-0">{pct}%</Badge>
+                            </div>
+                            <p className="text-2xl font-bold text-primary">
+                              R$ {(sq.cost / 1000).toFixed(0)}k
+                            </p>
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>{sq.total} demanda{sq.total === 1 ? "" : "s"}</span>
+                              <span>R$ {sq.cost.toLocaleString("pt-BR")}</span>
+                            </div>
+                            <div className="w-full bg-muted rounded-full h-1.5">
+                              <div className="bg-primary h-1.5 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Alocação por Squad</CardTitle>
