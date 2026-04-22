@@ -912,7 +912,28 @@ const Roadmap = () => {
                       return (
                         <TableRow key={item.id}>
                           <TableCell className="font-medium max-w-[200px] truncate">{item.title}</TableCell>
-                          <TableCell className="text-sm">{(item as any).business_units?.name || "—"}</TableCell>
+                          <TableCell>
+                            {(() => {
+                              const bus = itemBUsMap[item.id];
+                              if (bus && bus.length > 0) {
+                                return (
+                                  <div className="flex flex-wrap gap-1">
+                                    {bus.map((b, i) => (
+                                      <Badge key={i} variant="outline" className="text-xs">
+                                        {b.bu_name}
+                                        {bus.length > 1 && b.cost_share > 0 && (
+                                          <span className="ml-1 text-muted-foreground">
+                                            R${(b.cost_share / 1000).toFixed(0)}k
+                                          </span>
+                                        )}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                );
+                              }
+                              return <span className="text-sm">{(item as any).business_units?.name || "—"}</span>;
+                            })()}
+                          </TableCell>
                           <TableCell>
                             {squadsForItem.length > 0 ? (
                               <div className="flex flex-wrap gap-1">
