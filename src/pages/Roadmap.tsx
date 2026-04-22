@@ -8,7 +8,7 @@ import { KPICard } from "@/components/dashboard/KPICard";
 import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { useBusinessUnits, useRoadmapItems, useSquadBusinessUnits, useRoadmapItemSquads, useRoadmapItemBusinessUnits } from "@/hooks/useRoadmapData";
 import { useExport } from "@/hooks/useExport";
-import { Loader2, DollarSign, Rocket, CheckCircle2, AlertTriangle, Plus, X, Pencil, Trash2, Users } from "lucide-react";
+import { Loader2, DollarSign, Rocket, CheckCircle2, AlertTriangle, Plus, X, Pencil, Trash2, Users, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useState, useMemo } from "react";
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
@@ -84,6 +84,11 @@ const Roadmap = () => {
   const [addBUDialogOpen, setAddBUDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any | null>(null);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+
+  // Sort state for table
+  type SortKey = "title" | "status" | "priority" | "category" | "cost" | "period";
+  const [sortKey, setSortKey] = useState<SortKey>("cost");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   // Multi-squad form state
   const [selectedSquads, setSelectedSquads] = useState<Record<string, number>>({});
@@ -183,8 +188,53 @@ const Roadmap = () => {
     });
   }, [items, filterBU, filterStatus, filterCategory, filterSquad, itemSquadsMap, itemBUsMap]);
 
-  // KPIs
-  const totalInvested = useMemo(() => filteredItems.reduce((s, i) => s + (i.estimated_cost || 0), 0), [filteredItems]);
+  // Compute the actual prorated cost for an item, respecting BU filter when active
+  const getItemRateadoCost = (itemId: string, fallbackCost: number) => {
+    const bus = itemBUsMap[itemId];
+    if (bus && bus.length > 0) {
+      if (filterBU !== "all") {
+        return bus.filter(b => b.business_unit_id === filterBU).reduce((s, b) => s + b.cost_share, 0);
+      }
+      return bus.reduce((s, b) => s + b.cost_share, 0);
+    }
+    return fallbackCost;
+  };
+
+  // Sort filtered items
+  const sortedItems = useMemo(() => {
+    const arr = [...filteredItems];
+    const dir = sortDir === "asc" ? 1 : -1;
+    arr.sort((a, b) => {
+      let av: any, bv: any;
+      switch (sortKey) {
+        case "title": av = a.title || ""; bv = b.title || ""; return av.localeCompare(bv) * dir;
+        case "status": av = a.status || ""; bv = b.status || ""; return av.localeCompare(bv) * dir;
+        case "priority": {
+          const order = { critical: 0, high: 1, medium: 2, low: 3 } as Record<string, number>;
+          av = order[a.priority] ?? 99; bv = order[b.priority] ?? 99; return (av - bv) * dir;
+        }
+        case "category": av = a.category || ""; bv = b.category || ""; return av.localeCompare(bv) * dir;
+        case "period": av = a.start_date || ""; bv = b.start_date || ""; return av.localeCompare(bv) * dir;
+        case "cost":
+        default:
+          av = getItemRateadoCost(a.id, a.estimated_cost || 0);
+          bv = getItemRateadoCost(b.id, b.estimated_cost || 0);
+          return (av - bv) * dir;
+      }
+    });
+    return arr;
+  }, [filteredItems, sortKey, sortDir, itemBUsMap, filterBU]);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir(key === "title" || key === "category" ? "asc" : "desc"); }
+  };
+
+  // KPIs — use prorated cost when filtering by BU; else use estimated_cost as before
+  const totalInvested = useMemo(() => {
+    if (filterBU === "all") return filteredItems.reduce((s, i) => s + (i.estimated_cost || 0), 0);
+    return filteredItems.reduce((s, i) => s + getItemRateadoCost(i.id, i.estimated_cost || 0), 0);
+  }, [filteredItems, filterBU, itemBUsMap]);
   const inProgress = useMemo(() => filteredItems.filter(i => i.status === "in_progress").length, [filteredItems]);
   const doneCount = useMemo(() => filteredItems.filter(i => i.status === "done").length, [filteredItems]);
   const onTimeRate = useMemo(() => {
@@ -551,6 +601,64 @@ const Roadmap = () => {
                         </span>
                       </div>
                     )}
+
+                    {/* Preview da distribuição entre BUs */}
+                    {selectedBUIds.length > 0 && estimatedCostInput > 0 && (
+                      <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-foreground">Pré-visualização do rateio</span>
+                          {selectedBUIds.length > 1 && totalRateadoBU !== estimatedCostInput && (
+                            <span className="text-[10px] text-destructive font-medium">
+                              {totalRateadoBU < estimatedCostInput
+                                ? `Faltam R$ ${(estimatedCostInput - totalRateadoBU).toLocaleString("pt-BR")}`
+                                : `Excede em R$ ${(totalRateadoBU - estimatedCostInput).toLocaleString("pt-BR")}`}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Barra empilhada */}
+                        <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted">
+                          {selectedBUIds.map((buId, idx) => {
+                            const value = selectedBUIds.length === 1 ? estimatedCostInput : (selectedBUs[buId] || 0);
+                            const denom = selectedBUIds.length === 1 ? estimatedCostInput : Math.max(totalRateadoBU, estimatedCostInput);
+                            const pct = denom > 0 ? (value / denom) * 100 : 0;
+                            const color = PIE_COLORS[idx % PIE_COLORS.length];
+                            return (
+                              <div
+                                key={buId}
+                                style={{ width: `${pct}%`, backgroundColor: color }}
+                                className="transition-all"
+                                title={`${businessUnits?.find(b => b.id === buId)?.name}: R$ ${value.toLocaleString("pt-BR")}`}
+                              />
+                            );
+                          })}
+                        </div>
+
+                        {/* Lista detalhada por BU */}
+                        <div className="space-y-1">
+                          {selectedBUIds.map((buId, idx) => {
+                            const buName = businessUnits?.find(b => b.id === buId)?.name || "—";
+                            const value = selectedBUIds.length === 1 ? estimatedCostInput : (selectedBUs[buId] || 0);
+                            const pct = estimatedCostInput > 0 ? (value / estimatedCostInput) * 100 : 0;
+                            const color = PIE_COLORS[idx % PIE_COLORS.length];
+                            return (
+                              <div key={buId} className="flex items-center justify-between text-xs">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                                  <span className="truncate text-foreground">{buName}</span>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0 tabular-nums">
+                                  <span className="text-muted-foreground">{pct.toFixed(1)}%</span>
+                                  <span className="font-medium text-foreground">
+                                    R$ {value.toLocaleString("pt-BR")}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Multi-squad with cost share */}
@@ -887,28 +995,56 @@ const Roadmap = () => {
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Demandas</CardTitle>
-                <CardDescription>{filteredItems.length} demandas encontradas</CardDescription>
+                <CardDescription>
+                  {sortedItems.length} demandas encontradas
+                  {filterBU !== "all" && (
+                    <> · Investimento rateado nesta BU: <span className="font-medium text-foreground">R$ {totalInvested.toLocaleString("pt-BR")}</span></>
+                  )}
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Título</TableHead>
-                      <TableHead>Unidade</TableHead>
-                      <TableHead>Squads</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Prioridade</TableHead>
-                      <TableHead>Categoria</TableHead>
-                      <TableHead className="text-right">Custo (R$)</TableHead>
-                      <TableHead>Período</TableHead>
+                      {([
+                        { key: "title", label: "Título", align: "left" as const },
+                        { key: null, label: "Unidade", align: "left" as const },
+                        { key: null, label: "Squads", align: "left" as const },
+                        { key: "status", label: "Status", align: "left" as const },
+                        { key: "priority", label: "Prioridade", align: "left" as const },
+                        { key: "category", label: "Categoria", align: "left" as const },
+                        { key: "cost", label: filterBU !== "all" ? "Custo Rateado (R$)" : "Custo (R$)", align: "right" as const },
+                        { key: "period", label: "Período", align: "left" as const },
+                      ] as const).map((col, idx) => {
+                        const sortable = col.key !== null;
+                        const active = sortable && sortKey === col.key;
+                        const Icon = !sortable ? null : active ? (sortDir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+                        return (
+                          <TableHead key={idx} className={col.align === "right" ? "text-right" : undefined}>
+                            {sortable ? (
+                              <button
+                                type="button"
+                                onClick={() => toggleSort(col.key as SortKey)}
+                                className={`inline-flex items-center gap-1 hover:text-foreground transition-colors ${active ? "text-foreground font-medium" : ""} ${col.align === "right" ? "ml-auto" : ""}`}
+                              >
+                                {col.label}
+                                {Icon && <Icon className="h-3 w-3" />}
+                              </button>
+                            ) : col.label}
+                          </TableHead>
+                        );
+                      })}
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredItems.map(item => {
+                    {sortedItems.map(item => {
                       const status = STATUS_MAP[item.status] || { label: item.status, variant: "secondary" as const };
                       const priority = PRIORITY_MAP[item.priority] || { label: item.priority, color: "" };
                       const squadsForItem = getSquadsForItem(item.id, (item as any).squads?.name);
+                      const displayCost = filterBU !== "all"
+                        ? getItemRateadoCost(item.id, item.estimated_cost || 0)
+                        : (item.estimated_cost || 0);
                       return (
                         <TableRow key={item.id}>
                           <TableCell className="font-medium max-w-[200px] truncate">{item.title}</TableCell>
@@ -953,7 +1089,7 @@ const Roadmap = () => {
                           <TableCell><Badge variant={status.variant}>{status.label}</Badge></TableCell>
                           <TableCell><Badge variant="outline" className={priority.color}>{priority.label}</Badge></TableCell>
                           <TableCell className="text-sm">{CATEGORY_MAP[item.category] || item.category}</TableCell>
-                          <TableCell className="text-right text-sm">{(item.estimated_cost || 0).toLocaleString("pt-BR")}</TableCell>
+                          <TableCell className="text-right text-sm tabular-nums">{displayCost.toLocaleString("pt-BR")}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {item.start_date && item.end_date
                               ? `${format(parseISO(item.start_date), "dd/MM/yy")} – ${format(parseISO(item.end_date), "dd/MM/yy")}`
@@ -972,7 +1108,7 @@ const Roadmap = () => {
                         </TableRow>
                       );
                     })}
-                    {filteredItems.length === 0 && (
+                    {sortedItems.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={9} className="text-center text-muted-foreground py-8">Nenhuma demanda encontrada</TableCell>
                       </TableRow>
