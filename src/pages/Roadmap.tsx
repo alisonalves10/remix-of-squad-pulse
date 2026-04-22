@@ -81,6 +81,8 @@ const Roadmap = () => {
   const [filterSquad, setFilterSquad] = useState("all");
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [addBUDialogOpen, setAddBUDialogOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
 
   // Multi-squad form state
   const [selectedSquads, setSelectedSquads] = useState<Record<string, number>>({});
