@@ -210,36 +210,51 @@ const Roadmap = () => {
 
   const isLoading = itemsLoading || buLoading;
 
-  // Add item form
+  // Add or edit item form
   const handleAddItem = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const estimatedCost = Number(fd.get("estimated_cost")) || 0;
 
-    const { data: newItem, error } = await supabase.from("roadmap_items").insert({
+    const payload = {
       title: fd.get("title") as string,
       description: fd.get("description") as string || null,
       business_unit_id: (fd.get("business_unit_id") as string) || null,
-      squad_id: null, // legacy field — use junction table
+      squad_id: null,
       status: fd.get("status") as string,
       priority: fd.get("priority") as string,
       start_date: (fd.get("start_date") as string) || null,
       end_date: (fd.get("end_date") as string) || null,
       estimated_cost: estimatedCost,
       category: fd.get("category") as string,
-    }).select("id").single();
+    };
 
-    if (error || !newItem) {
-      toast.error("Erro ao adicionar demanda");
-      return;
+    let itemId: string | null = null;
+
+    if (editingItem) {
+      const { error } = await supabase.from("roadmap_items").update(payload).eq("id", editingItem.id);
+      if (error) {
+        toast.error("Erro ao atualizar demanda");
+        return;
+      }
+      itemId = editingItem.id;
+      // Remove existing squad allocations for this item
+      await supabase.from("roadmap_item_squads").delete().eq("roadmap_item_id", itemId);
+    } else {
+      const { data: newItem, error } = await supabase.from("roadmap_items").insert(payload).select("id").single();
+      if (error || !newItem) {
+        toast.error("Erro ao adicionar demanda");
+        return;
+      }
+      itemId = newItem.id;
     }
 
     // Insert squad cost shares
     const squadEntries = Object.entries(selectedSquads);
-    if (squadEntries.length > 0) {
+    if (squadEntries.length > 0 && itemId) {
       const { error: sqError } = await supabase.from("roadmap_item_squads").insert(
         squadEntries.map(([squad_id, cost_share]) => ({
-          roadmap_item_id: newItem.id,
+          roadmap_item_id: itemId!,
           squad_id,
           cost_share,
         }))
@@ -250,11 +265,38 @@ const Roadmap = () => {
       }
     }
 
-    toast.success("Demanda adicionada");
+    toast.success(editingItem ? "Demanda atualizada" : "Demanda adicionada");
     queryClient.invalidateQueries({ queryKey: ["roadmap_items"] });
     queryClient.invalidateQueries({ queryKey: ["roadmap_item_squads"] });
     setAddDialogOpen(false);
+    setEditingItem(null);
     setSelectedSquads({});
+  };
+
+  const openEditDialog = (item: any) => {
+    setEditingItem(item);
+    // Pre-populate squad allocations from junction table
+    const squadsForItem = itemSquadsMap[item.id] || [];
+    const initial: Record<string, number> = {};
+    squadsForItem.forEach(s => {
+      if (s.squad_id) initial[s.squad_id] = s.cost_share;
+    });
+    setSelectedSquads(initial);
+    setAddDialogOpen(true);
+  };
+
+  const handleDeleteItem = async () => {
+    if (!deletingItemId) return;
+    // Junction rows are removed via ON DELETE CASCADE
+    const { error } = await supabase.from("roadmap_items").delete().eq("id", deletingItemId);
+    if (error) {
+      toast.error("Erro ao excluir demanda");
+      return;
+    }
+    toast.success("Demanda excluída");
+    queryClient.invalidateQueries({ queryKey: ["roadmap_items"] });
+    queryClient.invalidateQueries({ queryKey: ["roadmap_item_squads"] });
+    setDeletingItemId(null);
   };
 
   const handleAddBU = async (e: React.FormEvent<HTMLFormElement>) => {
