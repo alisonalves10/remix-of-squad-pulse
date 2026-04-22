@@ -160,7 +160,14 @@ const Roadmap = () => {
   const filteredItems = useMemo(() => {
     if (!items) return [];
     return items.filter(item => {
-      if (filterBU !== "all" && item.business_unit_id !== filterBU) return false;
+      if (filterBU !== "all") {
+        const busForItem = itemBUsMap[item.id];
+        if (busForItem && busForItem.length > 0) {
+          if (!busForItem.some(b => b.business_unit_id === filterBU)) return false;
+        } else if (item.business_unit_id !== filterBU) {
+          return false;
+        }
+      }
       if (filterStatus !== "all" && item.status !== filterStatus) return false;
       if (filterCategory !== "all" && item.category !== filterCategory) return false;
       if (filterSquad !== "all") {
@@ -174,7 +181,7 @@ const Roadmap = () => {
       }
       return true;
     });
-  }, [items, filterBU, filterStatus, filterCategory, filterSquad, itemSquadsMap]);
+  }, [items, filterBU, filterStatus, filterCategory, filterSquad, itemSquadsMap, itemBUsMap]);
 
   // KPIs
   const totalInvested = useMemo(() => filteredItems.reduce((s, i) => s + (i.estimated_cost || 0), 0), [filteredItems]);
@@ -197,18 +204,36 @@ const Roadmap = () => {
     return Object.entries(map).map(([name, value]) => ({ name, value }));
   }, [filteredItems]);
 
-  // By BU
+  // By BU — use cost_share from junction table, fallback to legacy business_unit_id
   const buData = useMemo(() => {
     if (!businessUnits) return [];
     return businessUnits.map(bu => {
-      const buItems = (items || []).filter(i => i.business_unit_id === bu.id);
-      const total = buItems.length;
-      const done = buItems.filter(i => i.status === "done").length;
-      const cost = buItems.reduce((s, i) => s + (i.estimated_cost || 0), 0);
-      const hours = buItems.reduce((s, i) => s + (i.invested_hours || 0), 0);
+      // Sum cost_share from junction for this BU
+      let junctionCost = 0;
+      const itemIdsInJunction = new Set<string>();
+      if (itemBUs) {
+        for (const ib of itemBUs) {
+          if (ib.business_unit_id === bu.id) {
+            junctionCost += Number(ib.cost_share) || 0;
+            itemIdsInJunction.add(ib.roadmap_item_id);
+          }
+        }
+      }
+      // Items associated through junction
+      const junctionItems = (items || []).filter(i => itemIdsInJunction.has(i.id));
+      // Legacy items (no junction entries) tied via business_unit_id
+      const legacyItems = (items || []).filter(i =>
+        i.business_unit_id === bu.id && !(itemBUsMap[i.id]?.length)
+      );
+      const allItems = [...junctionItems, ...legacyItems];
+      const total = allItems.length;
+      const done = allItems.filter(i => i.status === "done").length;
+      const legacyCost = legacyItems.reduce((s, i) => s + (i.estimated_cost || 0), 0);
+      const cost = junctionCost + legacyCost;
+      const hours = allItems.reduce((s, i) => s + (i.invested_hours || 0), 0);
       return { ...bu, total, done, cost, hours, pct: total > 0 ? Math.round((done / total) * 100) : 0 };
     });
-  }, [businessUnits, items]);
+  }, [businessUnits, items, itemBUs, itemBUsMap]);
 
   // By Squad — use cost_share from junction table
   const squadData = useMemo(() => {
