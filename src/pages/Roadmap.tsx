@@ -396,6 +396,7 @@ const Roadmap = () => {
     toast.success("Demanda excluída");
     queryClient.invalidateQueries({ queryKey: ["roadmap_items"] });
     queryClient.invalidateQueries({ queryKey: ["roadmap_item_squads"] });
+    queryClient.invalidateQueries({ queryKey: ["roadmap_item_business_units"] });
     setDeletingItemId(null);
   };
 
@@ -460,29 +461,20 @@ const Roadmap = () => {
                 </form>
               </DialogContent>
             </Dialog>
-            <Dialog open={addDialogOpen} onOpenChange={(open) => { setAddDialogOpen(open); if (!open) { setSelectedSquads({}); setEditingItem(null); } }}>
+            <Dialog open={addDialogOpen} onOpenChange={(open) => { setAddDialogOpen(open); if (!open) { setSelectedSquads({}); setSelectedBUs({}); setEstimatedCostInput(0); setEditingItem(null); } }}>
               <DialogTrigger asChild>
-                <Button size="sm" onClick={() => { setEditingItem(null); setSelectedSquads({}); }}><Plus className="h-4 w-4 mr-1" />Demanda</Button>
+                <Button size="sm" onClick={() => { setEditingItem(null); setSelectedSquads({}); setSelectedBUs({}); setEstimatedCostInput(0); }}><Plus className="h-4 w-4 mr-1" />Demanda</Button>
               </DialogTrigger>
               <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>{editingItem ? "Editar Demanda" : "Nova Demanda"}</DialogTitle></DialogHeader>
                 <form onSubmit={handleAddItem} className="space-y-3">
                   <div><Label>Título</Label><Input name="title" required defaultValue={editingItem?.title || ""} /></div>
                   <div><Label>Descrição</Label><Textarea name="description" defaultValue={editingItem?.description || ""} /></div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label>Unidade de Negócio</Label>
-                      <select name="business_unit_id" defaultValue={editingItem?.business_unit_id || ""} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
-                        <option value="">Nenhuma</option>
-                        {businessUnits?.map(bu => <option key={bu.id} value={bu.id}>{bu.name}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <Label>Categoria</Label>
-                      <select name="category" defaultValue={editingItem?.category || "feature"} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
-                        {Object.entries(CATEGORY_MAP).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                      </select>
-                    </div>
+                  <div>
+                    <Label>Categoria</Label>
+                    <select name="category" defaultValue={editingItem?.category || "feature"} className="w-full border rounded-md px-3 py-2 text-sm bg-background">
+                      {Object.entries(CATEGORY_MAP).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -501,7 +493,12 @@ const Roadmap = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Custo Estimado (R$)</Label>
-                      <Input name="estimated_cost" type="number" defaultValue={editingItem?.estimated_cost ?? 0} />
+                      <Input
+                        name="estimated_cost"
+                        type="number"
+                        value={estimatedCostInput || ""}
+                        onChange={(e) => setEstimatedCostInput(Number(e.target.value) || 0)}
+                      />
                     </div>
                     <div />
                   </div>
