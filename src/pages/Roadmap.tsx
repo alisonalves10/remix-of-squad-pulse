@@ -188,8 +188,53 @@ const Roadmap = () => {
     });
   }, [items, filterBU, filterStatus, filterCategory, filterSquad, itemSquadsMap, itemBUsMap]);
 
-  // KPIs
-  const totalInvested = useMemo(() => filteredItems.reduce((s, i) => s + (i.estimated_cost || 0), 0), [filteredItems]);
+  // Compute the actual prorated cost for an item, respecting BU filter when active
+  const getItemRateadoCost = (itemId: string, fallbackCost: number) => {
+    const bus = itemBUsMap[itemId];
+    if (bus && bus.length > 0) {
+      if (filterBU !== "all") {
+        return bus.filter(b => b.business_unit_id === filterBU).reduce((s, b) => s + b.cost_share, 0);
+      }
+      return bus.reduce((s, b) => s + b.cost_share, 0);
+    }
+    return fallbackCost;
+  };
+
+  // Sort filtered items
+  const sortedItems = useMemo(() => {
+    const arr = [...filteredItems];
+    const dir = sortDir === "asc" ? 1 : -1;
+    arr.sort((a, b) => {
+      let av: any, bv: any;
+      switch (sortKey) {
+        case "title": av = a.title || ""; bv = b.title || ""; return av.localeCompare(bv) * dir;
+        case "status": av = a.status || ""; bv = b.status || ""; return av.localeCompare(bv) * dir;
+        case "priority": {
+          const order = { critical: 0, high: 1, medium: 2, low: 3 } as Record<string, number>;
+          av = order[a.priority] ?? 99; bv = order[b.priority] ?? 99; return (av - bv) * dir;
+        }
+        case "category": av = a.category || ""; bv = b.category || ""; return av.localeCompare(bv) * dir;
+        case "period": av = a.start_date || ""; bv = b.start_date || ""; return av.localeCompare(bv) * dir;
+        case "cost":
+        default:
+          av = getItemRateadoCost(a.id, a.estimated_cost || 0);
+          bv = getItemRateadoCost(b.id, b.estimated_cost || 0);
+          return (av - bv) * dir;
+      }
+    });
+    return arr;
+  }, [filteredItems, sortKey, sortDir, itemBUsMap, filterBU]);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir(key === "title" || key === "category" ? "asc" : "desc"); }
+  };
+
+  // KPIs — use prorated cost when filtering by BU; else use estimated_cost as before
+  const totalInvested = useMemo(() => {
+    if (filterBU === "all") return filteredItems.reduce((s, i) => s + (i.estimated_cost || 0), 0);
+    return filteredItems.reduce((s, i) => s + getItemRateadoCost(i.id, i.estimated_cost || 0), 0);
+  }, [filteredItems, filterBU, itemBUsMap]);
   const inProgress = useMemo(() => filteredItems.filter(i => i.status === "in_progress").length, [filteredItems]);
   const doneCount = useMemo(() => filteredItems.filter(i => i.status === "done").length, [filteredItems]);
   const onTimeRate = useMemo(() => {
