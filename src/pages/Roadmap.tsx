@@ -73,6 +73,7 @@ const Roadmap = () => {
   const { data: squads } = useSquads();
   const { data: squadBU } = useSquadBusinessUnits();
   const { data: itemSquads } = useRoadmapItemSquads();
+  const { data: itemBUs } = useRoadmapItemBusinessUnits();
   const queryClient = useQueryClient();
 
   const [filterBU, setFilterBU] = useState("all");
@@ -86,6 +87,9 @@ const Roadmap = () => {
 
   // Multi-squad form state
   const [selectedSquads, setSelectedSquads] = useState<Record<string, number>>({});
+  // Multi-BU form state (busId -> cost_share)
+  const [selectedBUs, setSelectedBUs] = useState<Record<string, number>>({});
+  const [estimatedCostInput, setEstimatedCostInput] = useState<number>(0);
 
   const toggleSquad = (squadId: string) => {
     setSelectedSquads(prev => {
@@ -103,7 +107,25 @@ const Roadmap = () => {
     setSelectedSquads(prev => ({ ...prev, [squadId]: value }));
   };
 
+  const toggleBU = (buId: string) => {
+    setSelectedBUs(prev => {
+      const next = { ...prev };
+      if (next[buId] !== undefined) {
+        delete next[buId];
+      } else {
+        next[buId] = 0;
+      }
+      return next;
+    });
+  };
+
+  const updateBUCost = (buId: string, value: number) => {
+    setSelectedBUs(prev => ({ ...prev, [buId]: value }));
+  };
+
   const totalRateado = useMemo(() => Object.values(selectedSquads).reduce((s, v) => s + v, 0), [selectedSquads]);
+  const totalRateadoBU = useMemo(() => Object.values(selectedBUs).reduce((s, v) => s + v, 0), [selectedBUs]);
+  const selectedBUIds = useMemo(() => Object.keys(selectedBUs), [selectedBUs]);
 
   // Build a map: itemId -> squads with cost_share
   const itemSquadsMap = useMemo(() => {
@@ -119,6 +141,21 @@ const Roadmap = () => {
     }
     return map;
   }, [itemSquads]);
+
+  // Build a map: itemId -> business units with cost_share
+  const itemBUsMap = useMemo(() => {
+    const map: Record<string, Array<{ business_unit_id: string; bu_name: string; cost_share: number }>> = {};
+    if (!itemBUs) return map;
+    for (const ib of itemBUs) {
+      if (!map[ib.roadmap_item_id]) map[ib.roadmap_item_id] = [];
+      map[ib.roadmap_item_id].push({
+        business_unit_id: ib.business_unit_id,
+        bu_name: (ib as any).business_units?.name || "—",
+        cost_share: Number(ib.cost_share) || 0,
+      });
+    }
+    return map;
+  }, [itemBUs]);
 
   const filteredItems = useMemo(() => {
     if (!items) return [];
