@@ -148,7 +148,9 @@ const Professionals = () => {
       { header: "ID", key: "id" },
       { header: "Título", key: "title" },
       { header: "Tipo", key: "type" },
-      { header: "Horas", key: "completed_work" },
+      { header: "Estimada", key: "original_estimate" },
+      { header: "Restante", key: "remaining_work" },
+      { header: "Concluída", key: "completed_work" },
       { header: "Area Path", key: "area_path" },
       { header: "Estado", key: "state" },
     ],
@@ -367,7 +369,9 @@ const Professionals = () => {
                       <TableHead>ID</TableHead>
                       <TableHead>Título</TableHead>
                       <TableHead>Tipo</TableHead>
-                      <TableHead className="text-right">Horas</TableHead>
+                      <TableHead className="text-right">Estimada</TableHead>
+                      <TableHead className="text-right">Restante</TableHead>
+                      <TableHead className="text-right">Concluída</TableHead>
                       <TableHead>Area Path</TableHead>
                       <TableHead>Estado</TableHead>
                     </TableRow>
@@ -380,6 +384,8 @@ const Professionals = () => {
                           <TableCell className="font-mono text-sm">{item.id}</TableCell>
                           <TableCell className="max-w-[300px] truncate">{item.title}</TableCell>
                           <TableCell>{getTypeBadge(item.type)}</TableCell>
+                          <TableCell className="text-right font-mono">{item.original_estimate ?? 0}</TableCell>
+                          <TableCell className="text-right font-mono">{item.remaining_work ?? 0}</TableCell>
                           <TableCell className="text-right font-mono">{item.completed_work ?? 0}</TableCell>
                           <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{item.area_path || "—"}</TableCell>
                           <TableCell>{getStateBadge(item.state)}</TableCell>
@@ -387,7 +393,7 @@ const Professionals = () => {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                           Nenhum item encontrado para este profissional
                         </TableCell>
                       </TableRow>

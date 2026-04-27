@@ -17,6 +17,8 @@ export interface ProfessionalWorkItem {
   type: string;
   state: string;
   completed_work: number | null;
+  original_estimate: number | null;
+  remaining_work: number | null;
   area_path: string | null;
   sprint_id: string;
   sprint_name: string;
@@ -58,7 +60,7 @@ export function useWorkItemsByUser(userId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("work_items")
-        .select("pk, id, title, type, state, completed_work, area_path, sprint_id")
+        .select("pk, id, title, type, state, completed_work, original_estimate, remaining_work, area_path, sprint_id")
         .eq("assigned_to_user_id", userId!)
         .order("id", { ascending: false });
       if (error) throw error;
