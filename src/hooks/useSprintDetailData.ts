@@ -160,6 +160,10 @@ export function useSprintDetailData(sprintId?: string) {
       const bugsResolved = workItems.filter(
         (wi) => wi.type === "Bug" && ["Done", "Closed"].includes(wi.state)
       ).length;
+      const issuesCreated = workItems.filter((wi) => wi.type === "Issue").length;
+      const issuesResolved = workItems.filter(
+        (wi) => wi.type === "Issue" && ["Done", "Closed"].includes(wi.state)
+      ).length;
 
       const plannedHours = Number(metrics?.planned_hours ?? 0);
       const completedHours = Number(metrics?.completed_hours ?? 0);
@@ -276,6 +280,8 @@ export function useSprintDetailData(sprintId?: string) {
         spilloverItems,
         bugsCreated,
         bugsResolved,
+        issuesCreated,
+        issuesResolved,
         plannedHours,
         completedHours,
         commitment,

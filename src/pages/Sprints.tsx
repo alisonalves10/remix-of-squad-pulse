@@ -13,7 +13,7 @@ import { BurndownChart } from "@/components/dashboard/BurndownChart";
 import { BurnupChart } from "@/components/dashboard/BurnupChart";
 import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText, CheckCircle, AlertTriangle, RotateCcw, Clock, Bug, Calendar, Search, RefreshCw, ChevronDown, ChevronRight, Layers, Star, BookOpen } from "lucide-react";
+import { FileText, CheckCircle, AlertTriangle, RotateCcw, Clock, Bug, CircleDot, Calendar, Search, RefreshCw, ChevronDown, ChevronRight, Layers, Star, BookOpen } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { useSprintDetailData } from "@/hooks/useSprintDetailData";
 import { isSprintActive as isSprintActiveFn } from "@/lib/sprint-utils";
@@ -130,6 +130,8 @@ const SprintDetail = () => {
     spilloverItems,
     bugsCreated,
     bugsResolved,
+    issuesCreated,
+    issuesResolved,
     plannedHours,
     completedHours,
     commitment,
@@ -324,6 +326,13 @@ const SprintDetail = () => {
             subtitle={bugsCreated > 0 ? `${Math.round((bugsResolved / bugsCreated) * 100)}% resolvidos` : "Nenhum bug na sprint"}
             icon={Bug}
             variant={bugsCreated === 0 ? "default" : bugsResolved >= bugsCreated ? "success" : "danger"}
+          />
+          <KPICard
+            title="Issues"
+            value={`${issuesResolved}/${issuesCreated}`}
+            subtitle={issuesCreated > 0 ? `${Math.round((issuesResolved / issuesCreated) * 100)}% resolvidas` : "Nenhuma issue na sprint"}
+            icon={CircleDot}
+            variant={issuesCreated === 0 ? "default" : issuesResolved >= issuesCreated ? "success" : "warning"}
           />
         </div>
 
