@@ -137,8 +137,7 @@ Deno.serve(async (req) => {
               .filter(it => (it.endDate || "").split("T")[0] < today)
               .sort((a, b) => (b.endDate || "").localeCompare(a.endDate || ""));
             const previous = ended[0];
-            const currentPath = result.sprint ? null : null; // we compare via path below
-            if (previous && previous.path !== (result as any).iterationPath) {
+            if (previous && previous.name !== result.sprint) {
               console.log(`[${areaPath}] Re-syncing previous iteration ${previous.name} to capture late updates`);
               const prevResult = await syncAreaPath(supabase, organization, project, areaPath, azureHeaders, previous);
               results.push(prevResult);
