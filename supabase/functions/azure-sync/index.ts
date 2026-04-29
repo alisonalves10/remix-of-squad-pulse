@@ -126,6 +126,26 @@ Deno.serve(async (req) => {
         } else {
           const result = await syncAreaPath(supabase, organization, project, areaPath, azureHeaders);
           results.push(result);
+
+          // Also re-sync the most recently ended iteration so late updates
+          // (items closed after sprint end) are captured.
+          try {
+            const azureBase = `https://dev.azure.com/${organization}/${project}`;
+            const allIters = await findAllIterations2026(azureBase, azureHeaders);
+            const today = new Date().toISOString().split("T")[0];
+            const ended = allIters
+              .filter(it => (it.endDate || "").split("T")[0] < today)
+              .sort((a, b) => (b.endDate || "").localeCompare(a.endDate || ""));
+            const previous = ended[0];
+            const currentPath = result.sprint ? null : null; // we compare via path below
+            if (previous && previous.path !== (result as any).iterationPath) {
+              console.log(`[${areaPath}] Re-syncing previous iteration ${previous.name} to capture late updates`);
+              const prevResult = await syncAreaPath(supabase, organization, project, areaPath, azureHeaders, previous);
+              results.push(prevResult);
+            }
+          } catch (err) {
+            console.warn(`[${areaPath}] Failed to re-sync previous iteration:`, err);
+          }
         }
       } catch (err) {
         console.error(`Error syncing area path ${areaPath}:`, err);
