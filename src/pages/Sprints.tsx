@@ -130,6 +130,8 @@ const SprintDetail = () => {
     spilloverItems,
     bugsCreated,
     bugsResolved,
+    issuesCreated,
+    issuesResolved,
     plannedHours,
     completedHours,
     commitment,
