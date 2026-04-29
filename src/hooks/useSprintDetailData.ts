@@ -280,6 +280,8 @@ export function useSprintDetailData(sprintId?: string) {
         spilloverItems,
         bugsCreated,
         bugsResolved,
+        issuesCreated,
+        issuesResolved,
         plannedHours,
         completedHours,
         commitment,
