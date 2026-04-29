@@ -13,7 +13,7 @@ import { BurndownChart } from "@/components/dashboard/BurndownChart";
 import { BurnupChart } from "@/components/dashboard/BurnupChart";
 import { ExportButtons } from "@/components/dashboard/ExportButtons";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText, CheckCircle, AlertTriangle, RotateCcw, Clock, Bug, Calendar, Search, RefreshCw, ChevronDown, ChevronRight, Layers, Star, BookOpen } from "lucide-react";
+import { FileText, CheckCircle, AlertTriangle, RotateCcw, Clock, Bug, CircleDot, Calendar, Search, RefreshCw, ChevronDown, ChevronRight, Layers, Star, BookOpen } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { useSprintDetailData } from "@/hooks/useSprintDetailData";
 import { isSprintActive as isSprintActiveFn } from "@/lib/sprint-utils";
