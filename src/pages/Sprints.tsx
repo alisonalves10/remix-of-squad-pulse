@@ -327,6 +327,13 @@ const SprintDetail = () => {
             icon={Bug}
             variant={bugsCreated === 0 ? "default" : bugsResolved >= bugsCreated ? "success" : "danger"}
           />
+          <KPICard
+            title="Issues"
+            value={`${issuesResolved}/${issuesCreated}`}
+            subtitle={issuesCreated > 0 ? `${Math.round((issuesResolved / issuesCreated) * 100)}% resolvidas` : "Nenhuma issue na sprint"}
+            icon={CircleDot}
+            variant={issuesCreated === 0 ? "default" : issuesResolved >= issuesCreated ? "success" : "warning"}
+          />
         </div>
 
         {/* Burndown & Burnup Charts */}
