@@ -215,8 +215,9 @@ async function syncAreaPath(
   const todayCheck = new Date().toISOString().split("T")[0];
   const sprintEndDate = currentIteration?.endDate?.split("T")[0];
   const isClosedSprint = sprintEndDate && sprintEndDate < todayCheck;
+  const useAsOf = isClosedSprint && !options?.skipAsOf;
   const wiqlBody: any = { query: wiqlQuery };
-  if (isClosedSprint && sprintEndDate) {
+  if (useAsOf && sprintEndDate) {
     // asOf must be a full ISO datetime — use end of day on sprint end date
     wiqlBody.asOf = `${sprintEndDate}T23:59:59Z`;
     console.log(`[${areaPath}] Using asOf=${wiqlBody.asOf} for closed sprint ${currentIteration?.name}`);
