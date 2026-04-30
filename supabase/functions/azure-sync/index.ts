@@ -169,7 +169,8 @@ async function syncAreaPath(
   project: string,
   areaPath: string,
   azureHeaders: Record<string, string>,
-  specificIteration?: IterationInfo
+  specificIteration?: IterationInfo,
+  options?: { skipAsOf?: boolean }
 ): Promise<SyncResult> {
   const teamAzureBase = `https://dev.azure.com/${organization}/${project}/${encodeURIComponent(areaPath)}`;
   const azureBase = `https://dev.azure.com/${organization}/${project}`;
