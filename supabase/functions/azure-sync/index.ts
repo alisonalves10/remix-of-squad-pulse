@@ -138,8 +138,8 @@ Deno.serve(async (req) => {
               .sort((a, b) => (b.endDate || "").localeCompare(a.endDate || ""));
             const previous = ended[0];
             if (previous && previous.name !== result.sprint) {
-              console.log(`[${areaPath}] Re-syncing previous iteration ${previous.name} to capture late updates`);
-              const prevResult = await syncAreaPath(supabase, organization, project, areaPath, azureHeaders, previous);
+              console.log(`[${areaPath}] Re-syncing previous iteration ${previous.name} to capture late updates (skipAsOf=true)`);
+              const prevResult = await syncAreaPath(supabase, organization, project, areaPath, azureHeaders, previous, { skipAsOf: true });
               results.push(prevResult);
             }
           } catch (err) {
@@ -169,7 +169,8 @@ async function syncAreaPath(
   project: string,
   areaPath: string,
   azureHeaders: Record<string, string>,
-  specificIteration?: IterationInfo
+  specificIteration?: IterationInfo,
+  options?: { skipAsOf?: boolean }
 ): Promise<SyncResult> {
   const teamAzureBase = `https://dev.azure.com/${organization}/${project}/${encodeURIComponent(areaPath)}`;
   const azureBase = `https://dev.azure.com/${organization}/${project}`;
@@ -214,8 +215,9 @@ async function syncAreaPath(
   const todayCheck = new Date().toISOString().split("T")[0];
   const sprintEndDate = currentIteration?.endDate?.split("T")[0];
   const isClosedSprint = sprintEndDate && sprintEndDate < todayCheck;
+  const useAsOf = isClosedSprint && !options?.skipAsOf;
   const wiqlBody: any = { query: wiqlQuery };
-  if (isClosedSprint && sprintEndDate) {
+  if (useAsOf && sprintEndDate) {
     // asOf must be a full ISO datetime — use end of day on sprint end date
     wiqlBody.asOf = `${sprintEndDate}T23:59:59Z`;
     console.log(`[${areaPath}] Using asOf=${wiqlBody.asOf} for closed sprint ${currentIteration?.name}`);
@@ -502,7 +504,9 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
     const originalEstimate = wi.fields["Microsoft.VSTS.Scheduling.OriginalEstimate"] || 0;
     const remainingWork = wi.fields["Microsoft.VSTS.Scheduling.RemainingWork"] || 0;
     const completedWork = wi.fields["Microsoft.VSTS.Scheduling.CompletedWork"] || 0;
-    const completedAt = state === "Done" || state === "Closed" ? (wi.fields["Microsoft.VSTS.Common.ClosedDate"] || null) : null;
+    const completedAt = state === "Done" || state === "Closed" || state === "Resolved"
+      ? (wi.fields["Microsoft.VSTS.Common.ClosedDate"] || wi.fields["Microsoft.VSTS.Common.ResolvedDate"] || null)
+      : null;
 
     // Extract parent_id from hierarchy relations
     let parentId: number | null = null;
