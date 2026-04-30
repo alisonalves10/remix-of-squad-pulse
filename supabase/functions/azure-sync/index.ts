@@ -504,7 +504,9 @@ async function syncToDatabase(supabase: any, workItems: AzureWorkItem[], org: st
     const originalEstimate = wi.fields["Microsoft.VSTS.Scheduling.OriginalEstimate"] || 0;
     const remainingWork = wi.fields["Microsoft.VSTS.Scheduling.RemainingWork"] || 0;
     const completedWork = wi.fields["Microsoft.VSTS.Scheduling.CompletedWork"] || 0;
-    const completedAt = state === "Done" || state === "Closed" ? (wi.fields["Microsoft.VSTS.Common.ClosedDate"] || null) : null;
+    const completedAt = state === "Done" || state === "Closed" || state === "Resolved"
+      ? (wi.fields["Microsoft.VSTS.Common.ClosedDate"] || wi.fields["Microsoft.VSTS.Common.ResolvedDate"] || null)
+      : null;
 
     // Extract parent_id from hierarchy relations
     let parentId: number | null = null;
