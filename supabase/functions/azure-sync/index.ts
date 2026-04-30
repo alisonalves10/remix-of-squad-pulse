@@ -138,8 +138,8 @@ Deno.serve(async (req) => {
               .sort((a, b) => (b.endDate || "").localeCompare(a.endDate || ""));
             const previous = ended[0];
             if (previous && previous.name !== result.sprint) {
-              console.log(`[${areaPath}] Re-syncing previous iteration ${previous.name} to capture late updates`);
-              const prevResult = await syncAreaPath(supabase, organization, project, areaPath, azureHeaders, previous);
+              console.log(`[${areaPath}] Re-syncing previous iteration ${previous.name} to capture late updates (skipAsOf=true)`);
+              const prevResult = await syncAreaPath(supabase, organization, project, areaPath, azureHeaders, previous, { skipAsOf: true });
               results.push(prevResult);
             }
           } catch (err) {
