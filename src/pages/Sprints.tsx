@@ -336,6 +336,57 @@ const SprintDetail = () => {
           />
         </div>
 
+        {/* Issues Detail Table */}
+        {issuesCreated > 0 && (
+          <Card className="shadow-card">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <CircleDot className="h-5 w-5 text-warning" />
+                Issues da Sprint
+              </CardTitle>
+              <CardDescription>
+                {issuesResolved} de {issuesCreated} issues resolvidas
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Título</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Responsável</TableHead>
+                      <TableHead className="text-right">Story Points</TableHead>
+                      <TableHead>Concluído em</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {workItems
+                      .filter((wi) => wi.type === "Issue")
+                      .map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-mono text-sm">{item.id}</TableCell>
+                          <TableCell className="max-w-[300px]">
+                            <span className="truncate block">{item.title}</span>
+                          </TableCell>
+                          <TableCell>{getStateBadge(item.state)}</TableCell>
+                          <TableCell className="text-sm">{(item as any).assigned_to_name || "—"}</TableCell>
+                          <TableCell className="text-right font-mono">
+                            {Number(item.story_points) || "—"}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {formatDate(item.completed_at)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Burndown & Burnup Charts */}
         {burndownData.length > 0 && (
           <div className="grid gap-6 md:grid-cols-2">
