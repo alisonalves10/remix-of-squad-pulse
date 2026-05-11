@@ -381,6 +381,64 @@ const SprintDetail = () => {
           </Collapsible>
         )}
 
+        {/* Issues Detail Table */}
+        {issuesCreated > 0 && (
+          <Collapsible open={isIssuesOpen} onOpenChange={setIsIssuesOpen}>
+            <Card className="shadow-card">
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer hover:bg-muted/30 transition-colors">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    {isIssuesOpen ? <ChevronDown className="h-5 w-5 text-muted-foreground" /> : <ChevronRight className="h-5 w-5 text-muted-foreground" />}
+                    <CircleDot className="h-5 w-5 text-warning" />
+                    Issues da Sprint
+                  </CardTitle>
+                  <CardDescription>
+                    {issuesResolved} de {issuesCreated} issues resolvidas
+                  </CardDescription>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>ID</TableHead>
+                          <TableHead>Título</TableHead>
+                          <TableHead>Estado</TableHead>
+                          <TableHead>Responsável</TableHead>
+                          <TableHead className="text-right">Story Points</TableHead>
+                          <TableHead>Concluído em</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {workItems
+                          .filter((wi) => wi.type === "Issue")
+                          .map((item) => (
+                            <TableRow key={item.id}>
+                              <TableCell className="font-mono text-sm">{item.id}</TableCell>
+                              <TableCell className="max-w-[300px]">
+                                <span className="truncate block">{item.title}</span>
+                              </TableCell>
+                              <TableCell>{getStateBadge(item.state)}</TableCell>
+                              <TableCell className="text-sm">{(item as any).assigned_to_name || "—"}</TableCell>
+                              <TableCell className="text-right font-mono">
+                                {Number(item.story_points) || "—"}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground text-sm">
+                                {formatDate(item.completed_at)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+        )}
+
         {/* Work Items Table */}
         <Card className="shadow-card">
           <CardHeader>
