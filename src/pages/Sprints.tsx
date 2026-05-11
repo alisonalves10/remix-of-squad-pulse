@@ -33,6 +33,7 @@ const SprintDetail = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
   const [isGerencialOpen, setIsGerencialOpen] = useState(true);
+  const [isIssuesOpen, setIsIssuesOpen] = useState(true);
 
   const { data, isLoading } = useSprintDetailData(id);
 
